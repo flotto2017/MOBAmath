@@ -3,263 +3,281 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Math ROV: Stable Multiplayer</title>
+    <title>Math ROV: Ultimate Edition (Big Text)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
     <style>
-        body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; overflow: hidden; font-family: sans-serif; background-color: #020617; }
-        #game-area { position: relative; overflow: hidden; background-color: #052e16; cursor: crosshair; touch-action: none; }
-        #ui-panel { height: 260px; background-color: #0f172a; border-top: 4px solid #1e293b; display: flex; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); z-index: 50; }
-        .damage-text { position: absolute; color: white; font-weight: 900; font-size: 24px; pointer-events: none; animation: floatPop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; text-shadow: 2px 2px 0px #000; z-index: 100; -webkit-text-stroke: 1.5px black; }
-        @media (min-width: 768px) { .damage-text { font-size: 32px; } }
-        @keyframes floatPop { 0% { transform: translateY(0) scale(0.5); opacity: 0; } 20% { transform: translateY(-10px) scale(1.2); opacity: 1; } 100% { transform: translateY(-50px) scale(1); opacity: 0; } }
-        .overlay-screen { position: absolute; inset: 0; z-index: 100; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .hidden { display: none !important; }
-        /* Shop Card Hover */
-        .shop-card:active { transform: scale(0.98); }
-    </style>
-
-    <!-- FIREBASE MODULE (Isolated) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDSRWRHZ0tSWBolCjtzcz9SHtozIimqXNQ",
-            authDomain: "mobamath-d7343.firebaseapp.com",
-            projectId: "mobamath-d7343",
-            storageBucket: "mobamath-d7343.firebasestorage.app",
-            messagingSenderId: "1073634282918",
-            appId: "1:1073634282918:web:576aab55ae51ed02a11367",
-            measurementId: "G-WVF93G5ZC8"
-        };
-
-        const appId = 'math-moba-v1';
-        let db, auth, user, roomId;
-        let isHost = false;
-        let unsubscribeRoom = null;
-
-        // Initialize Firebase safely
-        try {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            signInAnonymously(auth).catch(e => console.warn("Offline Mode:", e));
-            onAuthStateChanged(auth, (u) => { 
-                user = u; 
-                console.log("Firebase Connected:", user ? user.uid : "No User");
-            });
-        } catch (e) {
-            console.warn("Firebase Init Failed (Offline Mode)", e);
+        body {
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #020617;
+        }
+        
+        #main-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        #game-area {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: #052e16;
+            cursor: crosshair;
         }
 
-        // Expose Network API to Global Scope
-        window.NetworkAPI = {
-            createRoom: async (difficulty) => {
-                if (!user || !db) return null;
-                // สร้างเลข 3 หลัก (100 - 999)
-                roomId = Math.floor(Math.random() * 900 + 100).toString();
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                await setDoc(roomRef, { 
-                    host: user.uid, 
-                    guest: null, 
-                    status: 'waiting', 
-                    difficulty: difficulty, // Save difficulty to room
-                    lastUpdate: Date.now() 
-                });
-                isHost = true;
-                window.NetworkAPI.listen(roomId);
-                return roomId;
-            },
-            joinRoom: async (id) => {
-                if (!user || !db) return false;
-                roomId = id;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                const snap = await getDoc(roomRef);
-                if (snap.exists() && snap.data().status === 'waiting') {
-                    await updateDoc(roomRef, { guest: user.uid, status: 'ready' });
-                    isHost = false;
-                    window.NetworkAPI.listen(roomId);
-                    return true;
-                }
-                return false;
-            },
-            listen: (id) => {
-                if(!db) return;
-                if (unsubscribeRoom) unsubscribeRoom();
-                
-                unsubscribeRoom = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', id), (docSnap) => {
-                    const data = docSnap.data();
-                    if (data) {
-                        // Apply room difficulty if joining
-                        if (data.difficulty && !isHost) {
-                            STATE.difficulty = data.difficulty;
-                        }
+        #ui-panel {
+            height: 280px;
+            background-color: #0f172a;
+            border-top: 4px solid #1e293b;
+            display: flex;
+            flex-direction: row;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.8);
+            z-index: 50;
+            overflow: hidden;
+        }
 
-                        if (data.status === 'ready' && window.onGameStart) window.onGameStart(isHost ? 'blue' : 'red');
-                        
-                        // Sync Logic
-                        if (data.hostData && !isHost && window.updateEnemy) window.updateEnemy(data.hostData);
-                        else if (data.guestData && isHost && window.updateEnemy) window.updateEnemy(data.guestData);
-                    }
-                });
-            },
-            send: async (data) => {
-                if (!roomId || !user || !db) return;
-                // Simple throttle
-                if (Math.random() > 0.7) {
-                    const field = isHost ? 'hostData' : 'guestData';
-                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                    await updateDoc(roomRef, { [field]: data }).catch(()=>{});
-                }
-            },
-            cancel: async () => {
-                if (unsubscribeRoom) {
-                    unsubscribeRoom();
-                    unsubscribeRoom = null;
-                }
-                if (isHost && roomId && db) {
-                    try {
-                        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                        await deleteDoc(roomRef);
-                    } catch(e) { console.log("Error deleting room", e); }
-                }
-                roomId = null;
-                isHost = false;
-            }
-        };
-    </script>
+        /* Floating Text */
+        .damage-text {
+            position: absolute;
+            color: white;
+            font-weight: 900;
+            font-size: 24px;
+            pointer-events: none;
+            animation: floatPop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            text-shadow: 2px 2px 0px #000;
+            z-index: 100;
+            -webkit-text-stroke: 1.5px black;
+        }
+        
+        @media (min-width: 768px) {
+            .damage-text { font-size: 32px; }
+        }
+        @media (min-width: 1024px) {
+            .damage-text { font-size: 40px; }
+        }
+
+        @keyframes floatPop {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1); opacity: 0; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+
+        .btn-press:active { transform: scale(0.95); }
+        
+        .shop-card:hover {
+            border-color: #60a5fa;
+            background-color: #1e293b;
+        }
+
+        /* Start Button Overlay */
+        #start-overlay {
+            position: absolute; inset: 0; z-index: 100;
+            background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+    </style>
 </head>
 <body>
 
-    <div id="main-wrapper" class="h-screen w-screen flex flex-col">
-        <!-- Game Area -->
-        <div id="game-area" class="flex-grow relative bg-green-900">
-            <canvas id="game-canvas" class="block w-full h-full"></canvas>
+    <div id="main-wrapper">
+        <!-- Game Canvas -->
+        <div id="game-area">
+            <canvas id="game-canvas"></canvas>
             
-            <!-- 1. MAIN MENU -->
-            <div id="menu-overlay" class="overlay-screen">
-                <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-8 drop-shadow-lg text-center">MATH MOBA</h1>
-                <div class="flex flex-col gap-4 w-80">
-                    <button onclick="selectMode('single')" class="px-8 py-5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-2xl shadow-lg hover:scale-105 transition-transform border-b-4 border-blue-800">
-                        <i class="fas fa-robot mr-2"></i> เล่นคนเดียว
+            <!-- Difficulty Selection Overlay -->
+            <div id="start-overlay">
+                <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-4 drop-shadow-lg text-center">MATH MOBA</h1>
+                <p class="text-gray-300 mb-8 text-lg md:text-2xl">เลือกระดับความยากเพื่อเริ่มเกม</p>
+                
+                <div class="flex flex-col gap-4 w-64 md:w-80">
+                    <button onclick="startGame('easy')" class="px-8 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl text-xl shadow-lg transition-all transform hover:scale-105 btn-press border-b-4 border-green-800">
+                        ง่าย (1-9)
                     </button>
-                    <button onclick="selectMode('multiplayer')" class="px-8 py-5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-2xl shadow-lg hover:scale-105 transition-transform border-b-4 border-purple-800">
-                        <i class="fas fa-users mr-2"></i> เล่นกับเพื่อน
+                    <button onclick="startGame('medium')" class="px-8 py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-xl text-xl shadow-lg transition-all transform hover:scale-105 btn-press border-b-4 border-yellow-800">
+                        ปานกลาง (10-99)
+                    </button>
+                    <button onclick="startGame('hard')" class="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xl shadow-lg transition-all transform hover:scale-105 btn-press border-b-4 border-red-800">
+                        ยาก (100-999)
                     </button>
                 </div>
             </div>
 
-            <!-- 2. DIFFICULTY SELECT (Shared) -->
-            <div id="difficulty-overlay" class="overlay-screen hidden">
-                <h2 class="text-4xl font-bold text-white mb-6">เลือกระดับความยาก</h2>
-                <div class="flex flex-col gap-4 w-72">
-                    <button onclick="confirmDifficulty('easy')" class="px-6 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-xl border-b-4 border-green-800">ง่าย (1-9)</button>
-                    <button onclick="confirmDifficulty('medium')" class="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg text-xl border-b-4 border-yellow-800">ปานกลาง (10-99)</button>
-                    <button onclick="confirmDifficulty('hard')" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xl border-b-4 border-red-800">ยาก (100-999)</button>
-                    <button onclick="backToMenu()" class="mt-4 text-gray-400 hover:text-white underline">ย้อนกลับ</button>
+            <!-- Death Overlay -->
+            <div id="death-overlay" class="absolute inset-0 z-40 bg-gray-900/80 backdrop-blur-md grayscale hidden flex-col items-center justify-center pointer-events-none transition-opacity duration-300">
+                <h2 class="text-6xl md:text-8xl font-black text-red-600 mb-4 drop-shadow-[0_0_15px_rgba(220,38,38,0.8)] tracking-widest">YOU DIED</h2>
+                <div class="text-white text-3xl md:text-5xl font-bold mt-4 drop-shadow-md">
+                    Respawn in <span id="respawn-timer" class="text-yellow-400 text-7xl md:text-9xl font-mono">10</span> s
+                </div>
+                <div class="mt-8 bg-black/60 px-8 py-3 rounded-full text-blue-300 text-lg md:text-xl border border-blue-500/30 animate-pulse">
+                    <i class="fas fa-lightbulb text-yellow-400 mr-2"></i>ทิป: รีบแก้โจทย์สะสมเงินรอเกิดใหม่!
                 </div>
             </div>
 
-            <!-- 3. LOBBY (Friend Mode) -->
-            <div id="lobby-overlay" class="overlay-screen hidden">
-                <h2 class="text-4xl font-bold text-purple-300 mb-6">LOBBY</h2>
-                <div id="lobby-menu" class="flex flex-col gap-4 w-80">
-                    <button onclick="createRoom()" class="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xl border-b-4 border-indigo-800">สร้างห้องใหม่</button>
-                    <div class="flex gap-2">
-                        <input type="number" id="join-room-id" placeholder="รหัส 3 หลัก" class="flex-1 px-4 py-2 rounded text-black text-center font-bold border-2 border-indigo-500 text-xl" max="999">
-                        <button onclick="joinRoom()" class="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded border-b-4 border-pink-800">เข้าร่วม</button>
+            <!-- Recall Button -->
+            <button onclick="startPlayerRecall()" id="btn-recall" class="absolute bottom-6 right-6 z-30 w-20 h-20 md:w-24 md:h-24 rounded-full bg-blue-600 border-4 border-blue-400 text-white shadow-xl hover:bg-blue-500 active:scale-95 flex flex-col items-center justify-center pointer-events-auto transition-colors group">
+                <i class="fas fa-undo-alt text-2xl md:text-3xl mb-1 group-hover:rotate-[-45deg] transition-transform"></i>
+                <span class="text-xs md:text-sm font-bold uppercase tracking-wider">Recall</span>
+                <svg class="absolute top-0 left-0 w-full h-full transform -rotate-90 pointer-events-none hidden" id="recall-spinner">
+                    <circle cx="50%" cy="50%" r="40" stroke="white" stroke-width="4" fill="none" stroke-dasharray="251" stroke-dashoffset="251" class="animate-[dash_3s_linear_forwards]"></circle>
+                </svg>
+            </button>
+            <style> @keyframes dash { to { stroke-dashoffset: 0; } } </style>
+
+            <!-- HUD: Player Status -->
+            <div class="absolute top-4 left-4 z-20 flex gap-3 pointer-events-none select-none">
+                <div class="relative w-20 h-20 md:w-24 md:h-24 rounded-xl border-4 border-slate-700 shadow-2xl overflow-hidden bg-slate-800">
+                    <div class="absolute inset-0 flex items-center justify-center text-4xl md:text-5xl text-blue-400">
+                        <i class="fas fa-user-ninja"></i>
                     </div>
-                    <button onclick="backToDifficulty()" class="mt-4 text-gray-400 hover:text-white underline text-center">ย้อนกลับ</button>
+                    <div class="absolute bottom-0 w-full text-center bg-black/70 text-xs md:text-sm text-white font-bold py-1">LV.<span id="hud-level">1</span></div>
                 </div>
-                <div id="lobby-waiting" class="hidden flex-col items-center">
-                    <div class="text-xl text-gray-300 mb-2">รหัสห้องของคุณ</div>
-                    <div id="display-room-id" class="text-8xl font-mono font-black text-yellow-400 bg-black/60 px-10 py-6 rounded-2xl border-4 border-yellow-500/50 mb-8 select-all tracking-widest shadow-[0_0_30px_rgba(250,204,21,0.3)]">...</div>
-                    <div class="animate-pulse text-blue-300 mb-8 text-xl"><i class="fas fa-spinner fa-spin mr-2"></i>รอเพื่อนเข้าร่วม...</div>
-                    <button onclick="cancelRoom()" class="px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xl shadow-lg border-b-4 border-red-800 transition-transform active:scale-95">
-                        ยกเลิก
-                    </button>
+                
+                <div class="flex flex-col justify-center gap-1.5 min-w-[180px] md:min-w-[220px]">
+                    <div class="h-6 md:h-7 bg-gray-900 rounded border border-gray-600 relative overflow-hidden">
+                        <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-green-600 to-green-400 w-full transition-all duration-300"></div>
+                        <span class="absolute inset-0 text-xs md:text-sm text-white flex items-center justify-center font-bold drop-shadow-md tracking-wider">
+                            <i class="fas fa-heart text-red-500 mr-1.5"></i> <span id="hud-hp-text">500/500</span>
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 bg-black/60 p-2 rounded border border-slate-600/50 backdrop-blur-sm">
+                        <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-khanda text-red-400 w-5"></i> <span id="hud-atk" class="text-red-100 text-sm md:text-base">45</span></div>
+                        <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-shield-alt text-blue-400 w-5"></i> <span id="hud-armor" class="text-blue-100 text-sm md:text-base">0</span></div>
+                        <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-bolt text-yellow-400 w-5"></i> <span id="hud-aspd" class="text-yellow-100 text-sm md:text-base">1.0</span></div>
+                        <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-coins text-yellow-500 w-5"></i> <span id="hud-gold" class="text-yellow-200 text-sm md:text-base">0</span></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- In-Game Elements -->
-            <div id="game-ui" class="hidden pointer-events-none absolute inset-0">
-                <div id="death-overlay" class="absolute inset-0 bg-gray-900/80 backdrop-blur-md hidden flex-col items-center justify-center z-50">
-                    <h2 class="text-6xl font-black text-red-600 mb-4">YOU DIED</h2>
-                    <div class="text-white text-4xl font-bold">Respawn: <span id="respawn-timer" class="text-yellow-400">10</span>s</div>
+            <!-- HUD: Target Status -->
+            <div id="target-panel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-3 pointer-events-none select-none transition-opacity duration-200 opacity-0 bg-black/70 backdrop-blur-md p-3 rounded-xl border border-red-500/30 min-w-[180px] md:min-w-[250px]">
+                <div class="relative w-14 h-14 md:w-16 md:h-16 rounded-lg border-2 border-red-500 overflow-hidden bg-slate-800 shrink-0">
+                    <div class="absolute inset-0 flex items-center justify-center text-3xl md:text-4xl text-red-400">
+                        <i id="target-icon" class="fas fa-skull"></i>
+                    </div>
                 </div>
+                <div class="flex flex-col justify-center w-full">
+                    <div class="text-xs md:text-sm text-red-200 font-bold uppercase tracking-wider mb-1" id="target-name">Enemy</div>
+                    <div class="h-4 md:h-5 bg-gray-900 rounded-full border border-gray-600 relative overflow-hidden mb-1">
+                        <div id="target-hp-bar" class="h-full bg-red-600 w-full transition-all duration-200"></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span id="target-hp-text" class="text-[10px] md:text-xs font-bold text-white drop-shadow-md"></span>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 text-[10px] md:text-xs text-white">
+                        <span>ATK: <span id="target-atk" class="text-red-300 font-bold text-xs md:text-sm">10</span></span>
+                        <span>DEF: <span id="target-armor" class="text-blue-300 font-bold text-xs md:text-sm">0</span></span>
+                    </div>
+                </div>
+            </div>
 
-                <button onclick="startPlayerRecall()" id="btn-recall" class="absolute bottom-6 right-6 z-30 w-20 h-20 md:w-24 md:h-24 rounded-full bg-blue-600 border-4 border-blue-400 text-white shadow-xl hover:bg-blue-500 pointer-events-auto flex flex-col items-center justify-center">
-                    <i class="fas fa-undo-alt text-2xl"></i><span class="text-xs font-bold">Recall</span>
-                    <div id="recall-spinner" class="absolute inset-0 rounded-full border-4 border-white border-t-transparent animate-spin hidden"></div>
+            <!-- Game Over -->
+            <div id="game-over-overlay" class="absolute inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center text-center">
+                <div id="end-icon" class="text-8xl md:text-9xl mb-6 animate-bounce">🏆</div>
+                <h1 id="game-result-title" class="text-7xl md:text-9xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600">VICTORY</h1>
+                <p id="game-result-desc" class="text-gray-400 text-2xl md:text-3xl mb-10">The enemy core has been destroyed!</p>
+                <button onclick="location.reload()" class="px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-3xl md:text-4xl shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-105 btn-press">
+                    PLAY AGAIN
                 </button>
-
-                <div class="absolute top-4 right-4 z-20 pointer-events-auto border-2 border-slate-600 rounded bg-black/80 shadow-lg w-[200px] h-[120px] md:w-[240px] md:h-[140px]">
-                    <canvas id="minimap-canvas" class="w-full h-full"></canvas>
-                </div>
             </div>
         </div>
 
-        <!-- Control Panel -->
+        <!-- CONTROLS -->
         <div id="ui-panel">
-            <div class="flex-1 bg-slate-900 border-r-2 border-slate-700 flex flex-col p-2 min-w-0">
-                <div class="flex justify-between items-center mb-2 px-1 text-white">
-                    <h3 class="font-bold text-sm"><i class="fas fa-store"></i> ร้านค้า</h3>
-                    <span class="text-xs text-yellow-400"><i class="fas fa-coins"></i> <span id="shop-gold-display">0</span></span>
+            <!-- SHOP -->
+            <div class="flex-1 bg-slate-900 border-r-2 border-slate-700 flex flex-col p-2 md:p-3 min-w-0">
+                <div class="flex justify-between items-center mb-2 px-1">
+                    <h3 class="text-indigo-400 font-bold uppercase text-sm md:text-base tracking-wider flex items-center gap-2">
+                        <i class="fas fa-store"></i> ร้านค้า
+                    </h3>
                 </div>
-                <div id="shop-grid" class="grid grid-cols-2 gap-2 h-full content-start overflow-y-auto pb-2"></div>
+                <div id="shop-grid" class="grid grid-cols-2 gap-2 md:gap-3 h-full content-start overflow-y-auto px-1 pb-2"></div>
             </div>
-            
-            <div class="flex-1 bg-slate-800 flex flex-col p-2 relative overflow-hidden min-w-0 border-l-2 border-slate-700">
-                <div class="flex justify-between items-center mb-2 text-white">
-                    <h3 class="font-bold text-sm text-yellow-400"><i class="fas fa-brain"></i> Farm Gold</h3>
-                    <span class="text-xs bg-yellow-400/20 px-2 py-1 rounded">+50G</span>
+
+            <!-- MINIMAP -->
+            <div class="w-[280px] md:w-[350px] bg-slate-950 border-r-2 border-slate-700 flex flex-col items-center justify-center relative p-1 shrink-0">
+                <canvas id="minimap-canvas" class="border border-slate-600 rounded bg-black/50 cursor-crosshair shadow-inner" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+                <div class="absolute bottom-2 right-2 text-xs md:text-sm text-white/50 pointer-events-none font-mono font-bold bg-black/30 px-2 rounded">MAP VIEW</div>
+            </div>
+
+            <!-- MATH -->
+            <div class="flex-1 bg-slate-800 flex flex-col p-2 md:p-3 relative overflow-hidden min-w-0">
+                <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-2 md:mb-3 z-10">
+                    <h3 class="text-yellow-400 font-bold uppercase text-sm md:text-base tracking-wider flex items-center gap-2">
+                        <i class="fas fa-brain"></i> Farm Gold
+                    </h3>
+                    <span class="text-xs md:text-sm text-yellow-600 bg-yellow-400/10 px-3 py-1 rounded border border-yellow-400/20 font-bold">+50G</span>
                 </div>
-                <div class="flex-grow flex flex-col justify-center gap-2 px-1">
-                    <div class="bg-black/40 border-2 border-slate-600 rounded-xl p-3 text-center">
-                        <span id="math-q" class="text-3xl font-mono font-black text-white tracking-widest">?</span>
+                <div class="flex-grow flex flex-col justify-center gap-2 md:gap-3 z-10 px-1">
+                    <div class="bg-black/40 border-2 border-slate-600 rounded-xl p-3 md:p-4 text-center shadow-inner">
+                        <span id="math-q" class="text-4xl md:text-5xl font-mono font-black text-white tracking-wider drop-shadow-md">?</span>
                     </div>
-                    <div id="math-options-grid" class="grid grid-cols-2 gap-2 h-24"></div>
+                    <div id="math-options-grid" class="grid grid-cols-2 gap-2 md:gap-3 h-24 md:h-28"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MAIN GAME SCRIPT -->
     <script>
         const AudioSys = {
             ctx: null,
             init: function() {
-                try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        this.ctx = new AudioContext();
-                        if(this.ctx.state === 'suspended') this.ctx.resume();
-                    }
-                } catch(e) { console.log("Audio not supported"); }
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } else if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
             },
-            playTone: function(freq, type) {
+            playTone: function(freq, type, duration, vol = 0.1) {
                 if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = type;
                 osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
                 osc.start();
-                osc.stop(this.ctx.currentTime + 0.1);
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            shoot: function() { this.playTone(600, 'square', 0.1, 0.05); },
+            hit: function() { this.playTone(100, 'sawtooth', 0.1, 0.05); },
+            coin: function() { 
+                this.playTone(1200, 'sine', 0.1, 0.1); 
+                setTimeout(() => this.playTone(1800, 'sine', 0.2, 0.1), 100);
+            },
+            buy: function() {
+                this.playTone(400, 'sine', 0.1, 0.1);
+                setTimeout(() => this.playTone(600, 'sine', 0.3, 0.1), 100);
+            },
+            win: function() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [300, 400, 500, 600, 800].forEach((f, i) => {
+                    setTimeout(() => this.playTone(f, 'square', 0.5, 0.1), i * 200);
+                });
             }
         };
 
         const CONFIG = {
             mapW: 3800, mapH: 1400,
             baseHp: 5000, towerHp: 1500,
-            spawnRate: 10000, fountainRadius: 350,
-            fountainBlueX: 100, fountainRedX: 3700 
+            spawnRate: 10000, fountainRadius: 300,
+            fountainBlueX: 50, fountainRedX: 3750 
         };
 
         const ASSETS = { colors: { grass: '#064e3b', grassDark: '#022c22', lane: '#78716c', river: '#0ea5e9' } };
@@ -267,9 +285,10 @@
         const STATE = {
             active: false, lastTime: 0, gold: 200, 
             cam: { x: 0, y: 0 }, 
-            target: null, selectedUnit: null, shake: 0,
-            difficulty: 'easy',
-            gameMode: 'single'
+            target: null, 
+            selectedUnit: null, 
+            shake: 0,
+            difficulty: 'easy' // Default
         };
 
         const canvas = document.getElementById('game-canvas');
@@ -277,128 +296,57 @@
         const gameArea = document.getElementById('game-area');
         const mmCanvas = document.getElementById('minimap-canvas');
         const mmCtx = mmCanvas.getContext('2d');
-
+        
         let entities = [];
         let particles = [];
-        let projectiles = [];
         let player = null;
         let enemyHero = null;
+        let blueBase = null;
+        let redBase = null;
+        let projectiles = [];
         let lastSpawn = 0;
         let currAns = 0;
+        
         let MM_SCALE_X = 1;
         let MM_SCALE_Y = 1;
-        
-        let pendingMode = 'single';
 
-        // --- UI LOGIC ---
-        function selectMode(mode) {
-            pendingMode = mode;
-            document.getElementById('menu-overlay').classList.add('hidden');
-            document.getElementById('difficulty-overlay').classList.remove('hidden');
-            document.getElementById('difficulty-overlay').classList.add('flex');
+        function resize() {
+            canvas.width = gameArea.clientWidth;
+            canvas.height = gameArea.clientHeight;
+            const mmRect = mmCanvas.parentElement.getBoundingClientRect();
+            mmCanvas.width = mmRect.width;
+            mmCanvas.height = mmRect.height;
+            MM_SCALE_X = mmCanvas.width / CONFIG.mapW;
+            MM_SCALE_Y = mmCanvas.height / CONFIG.mapH;
+            if (!STATE.active && player) {
+                draw();
+                drawMinimap();
+            }
         }
+        window.addEventListener('resize', resize);
 
-        function confirmDifficulty(diff) {
-            STATE.difficulty = diff;
-            document.getElementById('difficulty-overlay').classList.add('hidden');
-            
-            if (pendingMode === 'single') {
-                startGame('blue', 'single');
-            } else {
-                document.getElementById('lobby-overlay').classList.remove('hidden');
-                document.getElementById('lobby-overlay').classList.add('flex');
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.05 + 0.02;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                this.life -= this.decay;
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, 4, 4);
+                ctx.globalAlpha = 1.0;
             }
         }
 
-        function backToMenu() {
-            document.getElementById('difficulty-overlay').classList.add('hidden');
-            document.getElementById('menu-overlay').classList.remove('hidden');
-        }
-
-        function backToDifficulty() {
-            document.getElementById('lobby-overlay').classList.add('hidden');
-            document.getElementById('difficulty-overlay').classList.remove('hidden');
-            document.getElementById('difficulty-overlay').classList.add('flex');
-        }
-
-        async function createRoom() {
-            if(window.NetworkAPI) {
-                // Pass difficulty to room creation
-                const id = await window.NetworkAPI.createRoom(STATE.difficulty);
-                if(id) {
-                    document.getElementById('lobby-menu').classList.add('hidden');
-                    document.getElementById('lobby-waiting').classList.remove('hidden');
-                    document.getElementById('lobby-waiting').classList.add('flex');
-                    document.getElementById('display-room-id').innerText = id;
-                } else { alert("Network Error"); }
-            } else { alert("Firebase not loaded"); }
-        }
-
-        async function joinRoom() {
-            if(window.NetworkAPI) {
-                const id = document.getElementById('join-room-id').value.trim();
-                if(!id) return;
-                const success = await window.NetworkAPI.joinRoom(id);
-                if(success) {
-                    document.getElementById('lobby-overlay').classList.add('hidden');
-                    // Guest waits for host to start, NetworkAPI listens for ready status
-                    // Note: startGame called by network listener for guest
-                } else { alert("ไม่พบห้องนี้"); }
-            }
-        }
-        
-        function cancelRoom() {
-            if(window.NetworkAPI && window.NetworkAPI.cancel) {
-                window.NetworkAPI.cancel();
-            }
-            document.getElementById('lobby-waiting').classList.add('hidden');
-            document.getElementById('lobby-waiting').classList.remove('flex');
-            document.getElementById('lobby-menu').classList.remove('hidden');
-        }
-
-        window.onGameStart = (team) => {
-            document.getElementById('lobby-overlay').classList.add('hidden');
-            startGame(team, 'multiplayer');
-        };
-        
-        window.updateEnemy = (data) => {
-            if (enemyHero) {
-                enemyHero.x = data.x; enemyHero.y = data.y;
-                enemyHero.hp = data.hp; enemyHero.maxHp = data.maxHp;
-            }
-        };
-
-        // --- GAME INIT ---
-        function startGame(playerTeam, mode) {
-            STATE.gameMode = mode;
-            STATE.active = true;
-            AudioSys.init();
-            
-            document.getElementById('game-ui').classList.remove('hidden');
-            
-            entities = []; particles = []; projectiles = [];
-            
-            const blueBase = new Entity('base', 'blue', 250, CONFIG.mapH/2, 70);
-            blueBase.maxHp = CONFIG.baseHp; blueBase.hp = CONFIG.baseHp; blueBase.armor = 60; blueBase.dmg = 240; blueBase.range = 400;
-            
-            const redBase = new Entity('base', 'red', CONFIG.mapW - 250, CONFIG.mapH/2, 70);
-            redBase.maxHp = CONFIG.baseHp; redBase.hp = CONFIG.baseHp; redBase.armor = 60; redBase.dmg = 240; redBase.range = 400;
-
-            spawnTowers();
-
-            player = new Hero(playerTeam);
-            enemyHero = new Hero(playerTeam === 'blue' ? 'red' : 'blue');
-
-            STATE.cam.x = Math.max(0, Math.min(player.x - canvas.width/2, CONFIG.mapW - canvas.width));
-            STATE.cam.y = Math.max(0, Math.min(player.y - canvas.height/2, CONFIG.mapH - canvas.height));
-
-            generateShop();
-            newMath();
-            
-            requestAnimationFrame(loop);
-        }
-
-        // --- ENTITY CLASSES ---
         class Entity {
             constructor(type, team, x, y, radius) {
                 this.type = type; this.team = team;
@@ -409,348 +357,714 @@
                 this.range = 100; this.speed = 0; this.atkCd = 0;
                 entities.push(this);
             }
+            get aps() { return (60 / Math.max(5, this.atkSpeedBase)).toFixed(1); }
             update() {
-                if(this.dead) return;
-                if(this.atkCd > 0) this.atkCd--;
-
+                if (this.dead) return;
+                if (this.atkCd > 0) this.atkCd--;
+                
                 if (this.speed > 0) {
                     let sepX = 0, sepY = 0;
                     entities.forEach(other => {
                         if (other !== this && !other.dead && other.speed > 0) {
-                            const dx = this.x - other.x;
-                            const dy = this.y - other.y;
-                            const d = Math.hypot(dx, dy);
-                            const minDist = this.radius + other.radius + 5;
-                            if (d < minDist && d > 0.1) { 
-                                const push = (minDist - d) / d; 
-                                sepX += dx * push * 0.1;
-                                sepY += dy * push * 0.1;
+                            const d = Math.hypot(this.x - other.x, this.y - other.y);
+                            const minDist = this.radius + other.radius + 5; 
+                            if (d < minDist) {
+                                const angle = Math.atan2(this.y - other.y, this.x - other.x);
+                                const force = (minDist - d) / minDist; 
+                                sepX += Math.cos(angle) * force * 1.5;
+                                sepY += Math.sin(angle) * force * 1.5;
                             }
                         }
                     });
-                    this.x += sepX; this.y += sepY;
+                    this.x += sepX;
+                    this.y += sepY;
                 }
 
-                if (this.speed > 0 || this.type === 'tower' || this.type === 'base') {
-                    let target = this.findTarget();
-                    if (target) {
-                        const d = Math.hypot(target.x - this.x, target.y - this.y);
-                        if (d <= this.range) {
-                            if (this.atkCd <= 0) {
-                                this.fire(target);
-                                this.atkCd = this.atkSpeedBase;
-                            }
-                        } else if (this.speed > 0) {
-                            if (this !== player && !(STATE.gameMode === 'multiplayer' && this === enemyHero)) {
-                                this.moveTowards(target.x, target.y);
-                            }
+                let target = this.findTarget();
+                if (target) {
+                    const dist = Math.hypot(target.x - this.x, target.y - this.y);
+                    if (dist <= this.range) {
+                        if (this.atkCd <= 0) {
+                            this.fire(target);
+                            this.atkCd = this.atkSpeedBase;
                         }
-                    } else if (this.speed > 0 && this !== player) {
-                        const destX = this.team === 'blue' ? CONFIG.fountainRedX : CONFIG.fountainBlueX;
-                        this.moveTowards(destX, CONFIG.mapH/2);
+                    } else if (this.speed > 0 && this.type !== 'tower' && this.type !== 'base') {
+                        if (this.type !== 'hero' || (this.type === 'hero' && this.team === 'red')) {
+                             this.moveTowards(target.x, target.y);
+                        } else if (this.type === 'hero' && this.team === 'blue' && !STATE.target) {
+                        }
                     }
                 }
-            }
-            findTarget() {
-                let closest = null; let minDist = 700;
-                entities.forEach(e => {
-                    if (e.team !== this.team && !e.dead) {
-                        const d = Math.hypot(e.x - this.x, e.y - this.y);
-                        let score = d;
-                        if (e.type === 'hero') score -= 200; 
-                        if (score < minDist) { minDist = score; closest = e; }
-                    }
-                });
-                return closest;
             }
             moveTowards(tx, ty) {
                 const angle = Math.atan2(ty - this.y, tx - this.x);
                 this.x += Math.cos(angle) * this.speed;
                 this.y += Math.sin(angle) * this.speed;
             }
+            findTarget() {
+                let closest = null;
+                let minDist = 500;
+                if (this.type === 'hero' || this.type === 'base') minDist = 600;
+
+                entities.forEach(e => {
+                    if (e.team !== this.team && !e.dead) {
+                        const d = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (d < minDist) { minDist = d; closest = e; }
+                    }
+                });
+                return closest;
+            }
             fire(target) {
-                projectiles.push({ x: this.x, y: this.y, tx: target, speed: 15, color: this.team==='blue'?'#60a5fa':'#f87171' });
-                if (this === player) AudioSys.playTone(600, 'square');
+                projectiles.push({
+                    x: this.x, y: this.y, tx: target,
+                    speed: 12, dmg: this.dmg,
+                    color: this.team === 'blue' ? '#60a5fa' : '#f87171'
+                });
+                const distToCam = Math.hypot(this.x - (STATE.cam.x + canvas.width/2), this.y - (STATE.cam.y + canvas.height/2));
+                if (distToCam < 900) AudioSys.shoot();
+                if (this === player) STATE.selectedUnit = target;
             }
             takeDamage(amt) {
-                const finalDmg = Math.max(1, amt * (100/(100+this.armor)));
+                if (this === player && player.isRecalling) {
+                    player.cancelRecall();
+                    createFloatingText(player.x, player.y, "Interrupted!", "#ef4444");
+                }
+                const multiplier = 100 / (100 + this.armor);
+                const finalDmg = Math.max(1, amt * multiplier);
                 this.hp -= finalDmg;
-                createDamageText(this.x, this.y, finalDmg, this.team==='blue'?'#ef4444':'#ffffff');
+                
+                if (Math.random() > 0.5) {
+                    for(let i=0; i<2; i++) particles.push(new Particle(this.x, this.y, this.team==='blue'?'#ef4444':'#ffffff'));
+                }
+
+                const distToCam = Math.hypot(this.x - (STATE.cam.x + canvas.width/2), this.y - (STATE.cam.y + canvas.height/2));
+                if (distToCam < 900) AudioSys.hit();
+                
+                const isResisted = finalDmg < amt * 0.8;
+                const txtColor = this.team === 'blue' ? '#ef4444' : (isResisted ? '#cbd5e1' : '#ffffff');
+                createDamageText(this.x, this.y, finalDmg, txtColor);
+                
                 if (this.hp <= 0) {
-                    this.hp = 0;
+                    this.hp = 0; 
                     if (this.type === 'hero') {
-                        this.dead = true;
-                        if (this === player) player.startRespawn();
-                        else if (this === enemyHero) enemyHero.startRespawn();
+                       this.dead = true;
+                       if (this === player) {
+                           player.startRespawnWait();
+                       } else if (this === enemyHero) {
+                           enemyHero.startRespawnWait();
+                       }
                     } else {
-                        this.dead = true;
+                       this.dead = true;
                     }
-                    if (this.team !== player.team && this.dead) {
-                        STATE.gold += (this.type==='hero'?300:(this.type==='minion'?30:500));
-                        updateHud();
+
+                    for(let i=0; i<8; i++) particles.push(new Particle(this.x, this.y, '#facc15'));
+                    
+                    if (this.team === 'red') {
+                        let reward = 0;
+                        if (this.type === 'minion') reward = 30;
+                        if (this.type === 'hero') reward = 300;
+                        if (this.type === 'tower') { reward = 500; STATE.shake = 10; }
+                        if (this.type === 'base') { reward = 2000; STATE.shake = 30; }
+                        if (reward > 0) {
+                            STATE.gold += reward;
+                            updateHud();
+                            createFloatingText(this.x, this.y, `+${reward}G`, '#facc15');
+                            AudioSys.coin();
+                        }
                     }
+                    if (STATE.selectedUnit === this) STATE.selectedUnit = null;
                 }
             }
             draw(ctx) {
                 if (this.dead) return;
-                ctx.fillStyle = this.team==='blue'?'#3b82f6':'#ef4444';
-                ctx.beginPath(); 
-                if (this.type==='base') ctx.arc(this.x, this.y, 70, 0, Math.PI*2);
-                else if (this.type==='tower') ctx.rect(this.x-25, this.y-40, 50, 80);
-                else ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-                ctx.fill();
-                ctx.fillStyle = '#000'; ctx.fillRect(this.x-30, this.y-this.radius-15, 60, 6);
-                ctx.fillStyle = this.team==='blue'?'#60a5fa':'#f87171'; 
-                ctx.fillRect(this.x-30, this.y-this.radius-15, 60 * (this.hp/this.maxHp), 6);
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.beginPath(); ctx.ellipse(this.x, this.y + this.radius*0.8, this.radius, this.radius*0.4, 0, 0, Math.PI*2); ctx.fill();
+
+                if ((this.type === 'tower' || this.type === 'base') && this.team !== player.team && !this.dead) {
+                    const distToPlayer = Math.hypot(player.x - this.x, player.y - this.y);
+                    if (distToPlayer < this.range + 200) {
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; ctx.lineWidth = 2;
+                        ctx.setLineDash([10, 10]); ctx.stroke(); ctx.setLineDash([]);
+                        ctx.fillStyle = 'rgba(239, 68, 68, 0.1)'; ctx.fill();
+                    }
+                }
+
+                if (this.type === 'tower') {
+                    ctx.fillStyle = this.team === 'blue' ? '#1e40af' : '#991b1b';
+                    ctx.fillRect(this.x - 20, this.y - 40, 40, 60);
+                    ctx.strokeStyle = '#fff'; ctx.strokeRect(this.x - 20, this.y - 40, 40, 60);
+                } else if (this.type === 'base') {
+                    ctx.fillStyle = this.team === 'blue' ? '#172554' : '#450a0a';
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = this.team === 'blue' ? '#60a5fa' : '#f87171';
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 20, 0, Math.PI*2); ctx.fill();
+                } else {
+                    ctx.fillStyle = this.team === 'blue' ? '#3b82f6' : '#ef4444';
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fill();
+                    if (this.type === 'hero') {
+                        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI*2);
+                        ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+                    }
+                }
+
+                if (STATE.selectedUnit === this) {
+                    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI*2); ctx.stroke();
+                }
+
+                const hpPct = this.hp / this.maxHp;
+                const barW = this.radius * 2.5;
+                ctx.fillStyle = '#000'; ctx.fillRect(this.x - barW/2, this.y - this.radius - 12, barW, 6);
+                ctx.fillStyle = this.team === 'blue' ? '#60a5fa' : '#f87171';
+                ctx.fillRect(this.x - barW/2, this.y - this.radius - 12, barW * hpPct, 6);
             }
         }
 
         class Hero extends Entity {
             constructor(team) {
-                super('hero', team, 0, 0, 25);
-                this.maxHp = 600; this.hp = 600; this.dmg = 60; this.armor = 15; this.range = 250; this.speed = 5;
-                this.spawn();
+                const startX = team === 'blue' ? 200 : CONFIG.mapW - 200;
+                super('hero', team, startX, CONFIG.mapH/2, 22);
+                this.maxHp = 600; this.hp = 600; 
+                this.dmg = 60; this.armor = 15; this.atkSpeedBase = 50;
+                this.range = 220; this.speed = 5;
+                this.isRecalling = false; this.recallTimer = 0; this.maxRecallTime = 180;
                 this.respawnTimer = 0;
-                this.isRecalling = false;
             }
-            spawn() {
-                this.x = this.team === 'blue' ? CONFIG.fountainBlueX : CONFIG.fountainRedX;
-                this.y = CONFIG.mapH / 2;
-                this.hp = this.maxHp;
-                this.dead = false;
-            }
-            startRespawn() {
+            
+            startRespawnWait() {
                 this.dead = true;
                 this.respawnTimer = 10;
-                if (this === player) {
-                    document.getElementById('death-overlay').classList.remove('hidden');
-                    document.getElementById('death-overlay').classList.add('flex');
+                this.x = -1000;
+                if (this.team === 'blue') {
+                    const overlay = document.getElementById('death-overlay');
+                    overlay.classList.remove('hidden');
+                    overlay.classList.add('flex');
+                    this.updateRespawnUI();
                 }
+            }
+            
+            updateRespawnUI() {
+                if (this.team === 'blue') {
+                    document.getElementById('respawn-timer').innerText = Math.ceil(this.respawnTimer);
+                }
+            }
+            
+            completeRespawn() {
+                this.dead = false;
+                this.hp = this.maxHp;
+                this.x = this.team === 'blue' ? CONFIG.fountainBlueX : CONFIG.fountainRedX;
+                this.y = CONFIG.mapH / 2;
+                if (this.team === 'blue') {
+                    const overlay = document.getElementById('death-overlay');
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('flex');
+                    createFloatingText(this.x, this.y, "RESPAWNED!", "#3b82f6");
+                }
+            }
+
+            startRecall() {
+                if (this.isRecalling || this.team !== 'blue' || this.dead) return; 
+                this.isRecalling = true; this.recallTimer = this.maxRecallTime;
+                document.getElementById('recall-spinner').classList.remove('hidden');
+                document.getElementById('recall-spinner').querySelector('circle').style.animation = 'none';
+                document.getElementById('recall-spinner').offsetHeight;
+                document.getElementById('recall-spinner').querySelector('circle').style.animation = 'dash 3s linear forwards';
+            }
+            cancelRecall() {
+                if (!this.isRecalling) return;
+                this.isRecalling = false; this.recallTimer = 0;
+                document.getElementById('recall-spinner').classList.add('hidden');
+            }
+            completeRecall() {
+                this.isRecalling = false;
+                document.getElementById('recall-spinner').classList.add('hidden');
+                this.x = CONFIG.fountainBlueX;
+                this.y = CONFIG.mapH / 2;
+                this.hp = Math.min(this.hp + this.maxHp * 0.2, this.maxHp);
+                createFloatingText(this.x, this.y, "Recalled!", "#3b82f6");
+                STATE.target = null;
             }
             update() {
                 if (this.dead) {
                     this.respawnTimer -= 1/60;
-                    if (this === player) document.getElementById('respawn-timer').innerText = Math.ceil(this.respawnTimer);
-                    if (this.respawnTimer <= 0) {
-                        this.spawn();
-                        if (this === player) {
-                            document.getElementById('death-overlay').classList.add('hidden');
-                            document.getElementById('death-overlay').classList.remove('flex');
-                        }
-                    }
-                    return;
+                    if (this.team === 'blue') this.updateRespawnUI();
+                    if (this.respawnTimer <= 0) this.completeRespawn();
+                    return; 
                 }
-
-                if (this === player) {
+                
+                // --- PLAYER LOGIC ---
+                if (this.team === 'blue') {
                     if (this.isRecalling) {
                         this.recallTimer--;
-                        if (this.recallTimer <= 0) {
-                            this.spawn();
-                            this.isRecalling = false;
-                            document.getElementById('recall-spinner').classList.add('hidden');
-                        }
+                        if (this.recallTimer <= 0) this.completeRecall();
+                        if (Math.random() > 0.8) createDamageText(this.x, this.y - 20, ".", "#60a5fa");
                     }
                     if (STATE.target) {
                         const d = Math.hypot(STATE.target.x - this.x, STATE.target.y - this.y);
                         if (d > 5) {
                             this.moveTowards(STATE.target.x, STATE.target.y);
-                            if (this.isRecalling) { 
-                                this.isRecalling = false; 
-                                document.getElementById('recall-spinner').classList.add('hidden');
-                            }
+                            if (this.isRecalling) this.cancelRecall();
                         } else { STATE.target = null; }
                     }
-                    if (STATE.gameMode === 'multiplayer' && window.NetworkAPI) window.NetworkAPI.send({x:this.x, y:this.y, hp:this.hp, maxHp:this.maxHp});
-                    const homeX = this.team === 'blue' ? CONFIG.fountainBlueX : CONFIG.fountainRedX;
-                    if (Math.hypot(this.x - homeX, this.y - CONFIG.mapH/2) < CONFIG.fountainRadius) {
-                        this.hp = Math.min(this.hp + 5, this.maxHp);
+                    
+                    const distToBase = Math.hypot(this.x - CONFIG.fountainBlueX, this.y - CONFIG.mapH/2);
+                    if (distToBase < CONFIG.fountainRadius && this.hp < this.maxHp) {
+                        this.hp = Math.min(this.hp + this.maxHp * 0.01, this.maxHp);
+                        if (Math.random() > 0.8) createDamageText(this.x, this.y - 30, "+", "#4ade80");
+                    }
+
+                    if (STATE.shake > 0) STATE.shake *= 0.9;
+                    if (STATE.shake < 0.5) STATE.shake = 0;
+                    let shakeX = (Math.random() - 0.5) * STATE.shake;
+                    let shakeY = (Math.random() - 0.5) * STATE.shake;
+                    STATE.cam.x = Math.max(0, Math.min(this.x - canvas.width/2, CONFIG.mapW - canvas.width)) + shakeX;
+                    STATE.cam.y = Math.max(0, Math.min(this.y - canvas.height/2, CONFIG.mapH - canvas.height)) + shakeY;
+                    
+                    super.update();
+                } 
+                // --- ENEMY AI LOGIC (IMPROVED - CLOSEST TARGET) ---
+                else {
+                    if (this.atkCd > 0) this.atkCd--;
+
+                    if (this.speed > 0) {
+                        let sepX = 0, sepY = 0;
+                        entities.forEach(other => {
+                            if (other !== this && !other.dead && other.speed > 0) {
+                                const d = Math.hypot(this.x - other.x, this.y - other.y);
+                                const minDist = this.radius + other.radius + 5; 
+                                if (d < minDist) {
+                                    const angle = Math.atan2(this.y - other.y, this.x - other.x);
+                                    const force = (minDist - d) / minDist; 
+                                    sepX += Math.cos(angle) * force * 1.5;
+                                    sepY += Math.sin(angle) * force * 1.5;
+                                }
+                            }
+                        });
+                        this.x += sepX;
+                        this.y += sepY;
+                    }
+
+                    // --- NEW LOGIC: FIND CLOSEST TARGET ---
+                    let target = null;
+                    let closestDist = Infinity;
+                    
+                    entities.forEach(e => {
+                        if (e.team !== this.team && !e.dead) {
+                            const d = Math.hypot(e.x - this.x, e.y - this.y);
+                            // Purely distance based aggression
+                            if (d < closestDist) {
+                                closestDist = d;
+                                target = e;
+                            }
+                        }
+                    });
+
+                    if (target) {
+                        const dist = Math.hypot(target.x - this.x, target.y - this.y);
+                        if (dist <= this.range) {
+                            if (this.atkCd <= 0) {
+                                this.fire(target);
+                                this.atkCd = this.atkSpeedBase;
+                            }
+                        } else {
+                            this.moveTowards(target.x, target.y);
+                        }
+                    } else {
+                        // If absolutely nothing found, go to base
+                        this.moveTowards(CONFIG.fountainBlueX, CONFIG.mapH/2);
                     }
                 }
+            }
+            draw(ctx) {
+                if (this.dead) return;
                 
+                super.draw(ctx);
+                if (this.isRecalling && this.team === 'blue') {
+                    const w = 40, h = 4, pct = 1 - (this.recallTimer / this.maxRecallTime);
+                    ctx.fillStyle = '#1e293b'; ctx.fillRect(this.x - w/2, this.y - this.radius - 25, w, h);
+                    ctx.fillStyle = '#3b82f6'; ctx.fillRect(this.x - w/2, this.y - this.radius - 25, w * pct, h);
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI*2);
+                    ctx.strokeStyle = `rgba(96, 165, 250, ${Math.random()})`; ctx.lineWidth = 2; ctx.stroke();
+                }
+            }
+        }
+
+        function startPlayerRecall() { if (player && !player.dead) player.startRecall(); }
+
+        class Minion extends Entity {
+            constructor(team, lane) {
+                const sx = team === 'blue' ? 150 : CONFIG.mapW - 150;
+                const sy = CONFIG.mapH / 2;
+                super('minion', team, sx, sy, 10);
+                this.lane = lane;
+                this.maxHp = 200; this.hp = 200; this.dmg = 15; this.armor = 0; this.atkSpeedBase = 60;
+                this.range = 100; this.speed = 2.5;
+                this.waypoints = this.getWaypoints(lane, team);
+                this.wpIdx = 0;
+            }
+            getWaypoints(lane, team) {
+                const w = CONFIG.mapW, h = CONFIG.mapH, m = 200;
+                let path = [];
+                if (lane === 'mid') path = [{x: w-150, y: h/2}];
+                else if (lane === 'top') path = [{x: m+100, y: m}, {x: w-m-100, y: m}, {x: w-150, y: h/2}];
+                else if (lane === 'bot') path = [{x: m+100, y: h-m}, {x: w-m-100, y: h-m}, {x: w-150, y: h/2}];
+                if (team === 'red') {
+                    if (lane === 'mid') return [{x: 150, y: h/2}];
+                    if (lane === 'top') return [{x: w-m-100, y: m}, {x: m+100, y: m}, {x: 150, y: h/2}];
+                    if (lane === 'bot') return [{x: w-m-100, y: h-m}, {x: m+100, y: h-m}, {x: 150, y: h/2}];
+                }
+                return path;
+            }
+            update() {
+                if (this.dead) return;
+                let target = this.findTarget();
+                if (target && Math.hypot(target.x - this.x, target.y - this.y) <= this.range) {
+                    if (this.atkCd <= 0) { this.fire(target); this.atkCd = this.atkSpeedBase; }
+                } else {
+                    if (this.wpIdx < this.waypoints.length) {
+                        const wp = this.waypoints[this.wpIdx];
+                        const d = Math.hypot(wp.x - this.x, wp.y - this.y);
+                        if (d < 20) this.wpIdx++; else this.moveTowards(wp.x, wp.y);
+                    } else { this.moveTowards(team === 'blue' ? CONFIG.mapW - 150 : 150, CONFIG.mapH/2); }
+                }
                 super.update();
             }
         }
 
-        function startPlayerRecall() {
-            if (player && !player.dead && !player.isRecalling) {
-                player.isRecalling = true;
-                player.recallTimer = 180;
-                document.getElementById('recall-spinner').classList.remove('hidden');
-            }
+        function init() {
+            // Entities
+            blueBase = new Entity('base', 'blue', 200, CONFIG.mapH/2, 60); 
+            blueBase.maxHp = CONFIG.baseHp; blueBase.hp = CONFIG.baseHp; blueBase.armor = 50; 
+            blueBase.dmg = 240; blueBase.range = 350; 
+            
+            redBase = new Entity('base', 'red', CONFIG.mapW - 200, CONFIG.mapH/2, 60); 
+            redBase.maxHp = CONFIG.baseHp; redBase.hp = CONFIG.baseHp; redBase.armor = 50;
+            redBase.dmg = 240; redBase.range = 350; 
+            
+            player = new Hero('blue');
+            enemyHero = new Hero('red');
+
+            spawnTowers();
+            generateShop();
+            newMath();
+            
+            resize(); 
         }
 
         function spawnTowers() {
-            new Entity('tower', 'blue', 1000, CONFIG.mapH/2, 40);
-            new Entity('tower', 'blue', 1800, CONFIG.mapH/2, 40);
-            new Entity('tower', 'red', CONFIG.mapW-1000, CONFIG.mapH/2, 40);
-            new Entity('tower', 'red', CONFIG.mapW-1800, CONFIG.mapH/2, 40);
-        }
+            const w = CONFIG.mapW, h = CONFIG.mapH, m = 200;
+            const blueT2 = 900;  
+            const blueT1 = 1500; 
+            const redT1 = w - 1500; 
+            const redT2 = w - 900;  
 
-        function createDamageText(x, y, val, color) {
-            const el = document.createElement('div');
-            el.className = 'damage-text';
-            el.style.color = color;
-            el.innerText = Math.round(val);
-            const screenX = x - STATE.cam.x;
-            const screenY = y - STATE.cam.y;
-            if (screenX > 0 && screenX < canvas.width && screenY > 0 && screenY < canvas.height) {
-                el.style.left = screenX + 'px';
-                el.style.top = screenY + 'px';
-                gameArea.appendChild(el);
-                setTimeout(() => el.remove(), 600);
-            } else { el.remove(); }
-        }
-
-        function newMath() {
-            const op = Math.random() > 0.5 ? '+' : '-';
-            let min = 1, max = 9;
-            if (STATE.difficulty === 'medium') { min = 10; max = 99; }
-            if (STATE.difficulty === 'hard') { min = 100; max = 999; }
-            
-            const ans = Math.floor(Math.random() * (max - min)) + min;
-            const a = Math.floor(Math.random() * ans);
-            const b = op === '+' ? ans - a : a - ans;
-            
-            let qText = `${Math.abs(a)} + ${Math.abs(ans-a)} = ?`;
-            if (op === '-') qText = `${ans + Math.abs(a)} - ${Math.abs(a)} = ?`;
-            
-            document.getElementById('math-q').innerText = qText;
-            
-            const grid = document.getElementById('math-options-grid');
-            grid.innerHTML = '';
-            let opts = [ans];
-            for(let i=0; i<100; i++) {
-                if (opts.length >= 4) break;
-                let fake = ans + Math.floor(Math.random() * 20) - 10;
-                if (!opts.includes(fake) && fake >= 0) opts.push(fake);
-            }
-            opts.sort(() => Math.random()-0.5).forEach(o => {
-                const btn = document.createElement('button');
-                btn.className = 'bg-slate-700 text-white font-bold rounded shadow active:scale-95';
-                btn.innerText = o;
-                btn.onclick = () => {
-                    if (o === ans) { STATE.gold += 50; updateHud(); newMath(); AudioSys.playTone(800, 'sine'); }
-                    else { btn.classList.add('bg-red-500'); setTimeout(newMath, 500); }
-                };
-                grid.appendChild(btn);
-            });
-        }
-
-        function generateShop() {
-            const grid = document.getElementById('shop-grid');
-            const items = [
-                { n: "ดาบ", d: "+20 DMG", c: 200, act: () => player.dmg += 20 },
-                { n: "เกราะ", d: "+20 DEF", c: 200, act: () => player.armor += 20 },
-                { n: "รองเท้า", d: "+SPD", c: 200, act: () => player.atkSpeedBase = Math.max(20, player.atkSpeedBase - 10) },
-                { n: "ยา", d: "+HP", c: 100, act: () => player.hp = Math.min(player.hp + 200, player.maxHp) }
+            const positions = [
+                {x: blueT2, y: h/2, t: 'blue'}, {x: blueT1, y: h/2, t: 'blue'},
+                {x: redT1, y: h/2, t: 'red'}, {x: redT2, y: h/2, t: 'red'},
+                {x: blueT2, y: m, t: 'blue'}, {x: blueT1, y: m, t: 'blue'},
+                {x: redT1, y: m, t: 'red'}, {x: redT2, y: m, t: 'red'},
+                {x: blueT2, y: h-m, t: 'blue'}, {x: blueT1, y: h-m, t: 'blue'},
+                {x: redT1, y: h-m, t: 'red'}, {x: redT2, y: h-m, t: 'red'}
             ];
-            grid.innerHTML = '';
-            items.forEach(i => {
-                const btn = document.createElement('button');
-                btn.className = 'shop-card bg-slate-800 p-2 rounded border border-slate-600 text-white text-left';
-                btn.innerHTML = `<div class="font-bold text-sm">${i.n}</div><div class="text-xs text-gray-400">${i.d}</div><div class="text-yellow-400 font-mono text-xs">${i.c}G</div>`;
-                btn.onclick = () => {
-                    if (STATE.gold >= i.c) {
-                        STATE.gold -= i.c; i.act(); updateHud(); AudioSys.playTone(600, 'triangle');
-                    }
-                };
-                grid.appendChild(btn);
+            
+            positions.forEach(p => {
+                const t = new Entity('tower', p.t, p.x, p.y, 30);
+                t.maxHp = CONFIG.towerHp; t.hp = CONFIG.towerHp; t.dmg = 80; t.range = 300; t.atkSpeedBase = 80; t.armor = 30;
             });
         }
 
-        function updateHud() {
-            if (!player) return;
-            document.getElementById('shop-gold-display').innerText = STATE.gold;
-        }
-
-        function loop() {
+        function loop(timestamp) {
             if (!STATE.active) return;
-            requestAnimationFrame(loop);
-
-            const now = Date.now();
-            if (now - lastSpawn > CONFIG.spawnRate) {
-                new Minion('blue', 'mid'); new Minion('red', 'mid');
-                lastSpawn = now;
+            if (timestamp - lastSpawn > CONFIG.spawnRate) {
+                ['top', 'mid', 'bot'].forEach(lane => { new Minion('blue', lane); new Minion('red', lane); });
+                lastSpawn = timestamp;
             }
-
             entities.forEach(e => e.update());
+            particles.forEach(p => p.update());
             
-            projectiles = projectiles.filter(p => {
-                const dx = p.tx.x - p.x;
-                const dy = p.tx.y - p.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist < 10) {
-                    p.tx.takeDamage(10);
-                    return false; 
-                }
-                const angle = Math.atan2(dy, dx);
-                p.x += Math.cos(angle) * p.speed;
-                p.y += Math.sin(angle) * p.speed;
-                return true;
+            entities = entities.filter(e => {
+                if (e.type === 'hero' || e.type === 'tower' || e.type === 'base') return true; 
+                return !e.dead;
             });
+            
+            particles = particles.filter(p => p.life > 0);
+            
+            if (STATE.selectedUnit && STATE.selectedUnit.dead && STATE.selectedUnit.type !== 'hero') STATE.selectedUnit = null;
 
+            projectiles.forEach(p => {
+                if (p.tx.dead) { p.hit = true; return; }
+                const dx = p.tx.x - p.x, dy = p.tx.y - p.y;
+                if (Math.hypot(dx, dy) < p.speed) { p.tx.takeDamage(p.dmg); p.hit = true; }
+                else { const a = Math.atan2(dy, dx); p.x += Math.cos(a)*p.speed; p.y += Math.sin(a)*p.speed; }
+            });
+            projectiles = projectiles.filter(p => !p.hit);
+            if (redBase.hp <= 0) gameOver(true);
+            if (blueBase.hp <= 0) gameOver(false);
+            updateHud();
+            draw();
+            drawMinimap();
+            requestAnimationFrame(loop);
+        }
+
+        function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (player) {
-                STATE.cam.x = Math.max(0, Math.min(player.x - canvas.width/2, CONFIG.mapW - canvas.width));
-                STATE.cam.y = Math.max(0, Math.min(player.y - canvas.height/2, CONFIG.mapH - canvas.height));
-            }
-            
             ctx.save();
             ctx.translate(-STATE.cam.x, -STATE.cam.y);
             
-            ctx.fillStyle = ASSETS.colors.grassDark; ctx.fillRect(0,0, CONFIG.mapW, CONFIG.mapH);
-            ctx.fillStyle = '#064e3b'; ctx.beginPath(); ctx.arc(CONFIG.fountainBlueX, CONFIG.mapH/2, CONFIG.fountainRadius, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#450a0a'; ctx.beginPath(); ctx.arc(CONFIG.fountainRedX, CONFIG.mapH/2, CONFIG.fountainRadius, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = ASSETS.colors.grassDark; ctx.fillRect(0, 0, CONFIG.mapW, CONFIG.mapH);
             
-            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 100; ctx.lineCap = 'round';
-            ctx.beginPath(); ctx.moveTo(0, CONFIG.mapH/2); ctx.lineTo(CONFIG.mapW, CONFIG.mapH/2); ctx.stroke();
+            ctx.shadowBlur = 20; ctx.shadowColor = '#4ade80';
+            ctx.fillStyle = '#065f46'; ctx.beginPath(); ctx.arc(CONFIG.fountainBlueX, CONFIG.mapH/2, CONFIG.fountainRadius, 0, Math.PI*2); ctx.fill();
+            ctx.shadowColor = '#f87171';
+            ctx.fillStyle = '#7f1d1d'; ctx.beginPath(); ctx.arc(CONFIG.fountainRedX, CONFIG.mapH/2, CONFIG.fountainRadius, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            const w = CONFIG.mapW, h = CONFIG.mapH, m = 200;
+            const drawPaths = () => {
+                ctx.beginPath(); ctx.moveTo(100, h/2); ctx.lineTo(w-100, h/2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(200, h/2); ctx.quadraticCurveTo(200, m, m+200, m); ctx.lineTo(w-m-200, m); ctx.quadraticCurveTo(w-200, m, w-200, h/2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(200, h/2); ctx.quadraticCurveTo(200, h-m, m+200, h-m); ctx.lineTo(w-m-200, h-m); ctx.quadraticCurveTo(w-200, h-m, w-200, h/2); ctx.stroke();
+            }
+            ctx.lineWidth = 150; ctx.strokeStyle = '#334155'; drawPaths();
+            ctx.lineWidth = 130; ctx.strokeStyle = ASSETS.colors.lane; drawPaths();
+            ctx.lineWidth = 160; ctx.strokeStyle = ASSETS.colors.river;
+            ctx.beginPath(); ctx.moveTo(w/2 - 200, 0); ctx.lineTo(w/2 + 200, h); ctx.stroke();
 
             entities.forEach(e => e.draw(ctx));
-            projectiles.forEach(p => {
-                ctx.fillStyle = p.color || 'yellow'; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
-            });
-
+            projectiles.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fill(); });
+            particles.forEach(p => p.draw(ctx));
             ctx.restore();
-
-            mmCtx.fillStyle = '#000'; mmCtx.fillRect(0,0, mmCanvas.width, mmCanvas.height);
-            entities.forEach(e => {
-                const mx = e.x * (mmCanvas.width / CONFIG.mapW);
-                const my = e.y * (mmCanvas.height / CONFIG.mapH);
-                mmCtx.fillStyle = e.team === 'blue' ? '#3b82f6' : '#ef4444';
-                mmCtx.beginPath(); mmCtx.arc(mx, my, e.type==='base'?4:2, 0, Math.PI*2); mmCtx.fill();
-            });
         }
 
+        function drawMinimap() {
+            mmCtx.fillStyle = '#0f172a'; mmCtx.fillRect(0, 0, mmCanvas.width, mmCanvas.height);
+            mmCtx.strokeStyle = '#334155'; mmCtx.lineWidth = 2;
+            const w = mmCanvas.width, h = mmCanvas.height;
+            mmCtx.beginPath(); mmCtx.moveTo(0, h/2); mmCtx.lineTo(w, h/2); mmCtx.stroke(); 
+            
+            entities.forEach(e => {
+                if (e.dead) return; 
+                const mx = e.x * MM_SCALE_X; const my = e.y * MM_SCALE_Y;
+                mmCtx.fillStyle = e.team === 'blue' ? '#3b82f6' : '#ef4444';
+                if (e.type === 'hero') {
+                    mmCtx.fillStyle = '#fff'; mmCtx.beginPath(); mmCtx.arc(mx, my, 4, 0, Math.PI*2); mmCtx.fill();
+                    mmCtx.strokeStyle = e.team === 'blue' ? '#3b82f6' : '#ef4444'; mmCtx.lineWidth = 2; mmCtx.stroke();
+                } else if (e.type === 'base') mmCtx.fillRect(mx-4, my-4, 8, 8);
+                else if (e.type === 'tower') mmCtx.fillRect(mx-2, my-2, 4, 4);
+                else { mmCtx.beginPath(); mmCtx.arc(mx, my, 1.5, 0, Math.PI*2); mmCtx.fill(); }
+            });
+            const viewX = STATE.cam.x * MM_SCALE_X, viewY = STATE.cam.y * MM_SCALE_Y;
+            const viewW = canvas.width * MM_SCALE_X, viewH = canvas.height * MM_SCALE_Y;
+            mmCtx.strokeStyle = '#fbbf24'; mmCtx.lineWidth = 1; mmCtx.strokeRect(viewX, viewY, viewW, viewH);
+        }
+
+        mmCanvas.parentElement.addEventListener('mousedown', (e) => {
+            if (!STATE.active) return;
+            const r = mmCanvas.getBoundingClientRect();
+            STATE.target = { x: (e.clientX - r.left) / MM_SCALE_X, y: (e.clientY - r.top) / MM_SCALE_Y };
+        });
+
         canvas.addEventListener('mousedown', (e) => {
-            if(!player) return;
-            const rect = canvas.getBoundingClientRect();
-            const worldX = e.clientX - rect.left + STATE.cam.x;
-            const worldY = e.clientY - rect.top + STATE.cam.y;
+            if (!STATE.active) return;
+            const r = canvas.getBoundingClientRect();
+            const clickMapX = e.clientX - r.left + STATE.cam.x;
+            const clickMapY = e.clientY - r.top + STATE.cam.y;
             
             let clicked = null;
             entities.forEach(ent => {
-                if (ent.team !== player.team && !ent.dead && Math.hypot(ent.x - worldX, ent.y - worldY) < ent.radius + 10) {
-                    clicked = ent;
-                }
+                if (!ent.dead && Math.hypot(ent.x - clickMapX, ent.y - clickMapY) < ent.radius + 15) clicked = ent;
             });
 
-            if (clicked) {
+            if (clicked && clicked.team !== player.team) {
                 STATE.selectedUnit = clicked;
+            } else {
+                STATE.target = { x: clickMapX, y: clickMapY };
+                const marker = document.createElement('div');
+                marker.className = 'absolute w-4 h-4 border-2 border-green-400 rounded-full animate-ping pointer-events-none';
+                marker.style.left = (e.clientX - r.left - 8) + 'px';
+                marker.style.top = (e.clientY - r.top - 8) + 'px';
+                gameArea.appendChild(marker);
+                setTimeout(() => marker.remove(), 500);
             }
-            STATE.target = { x: worldX, y: worldY };
         });
 
-        function resize() {
-            canvas.width = gameArea.clientWidth;
-            canvas.height = gameArea.clientHeight;
-            const mmRect = mmCanvas.parentElement.getBoundingClientRect();
-            mmCanvas.width = mmRect.width;
-            mmCanvas.height = mmRect.height;
+        // Updated Start Game Function with Difficulty
+        function startGame(difficulty) {
+            STATE.difficulty = difficulty;
+            document.getElementById('start-overlay').style.display = 'none';
+            STATE.active = true;
+            AudioSys.init();
+            
+            // Refresh Math with new difficulty
+            newMath();
+            
+            loop(performance.now());
         }
-        window.addEventListener('resize', resize);
-        resize();
 
+        function createDamageText(x, y, val, color) {
+            if (Math.random() > 0.8) return;
+            const el = document.createElement('div');
+            el.className = 'damage-text'; el.style.color = color; el.innerText = Math.round(val);
+            const sx = x - STATE.cam.x, sy = y - STATE.cam.y;
+            if (sx<0 || sx>canvas.width || sy<0 || sy>canvas.height) return;
+            el.style.left = sx + 'px'; el.style.top = sy + 'px';
+            gameArea.appendChild(el); setTimeout(() => el.remove(), 600);
+        }
+
+        function createFloatingText(x, y, text, color) {
+            const el = document.createElement('div');
+            el.className = 'damage-text'; el.style.color = color; el.innerText = text;
+            el.style.fontSize = '24px'; el.style.zIndex = '101';
+            const sx = x - STATE.cam.x; const sy = y - STATE.cam.y;
+            el.style.left = sx + 'px'; el.style.top = (sy - 30) + 'px';
+            gameArea.appendChild(el); setTimeout(() => el.remove(), 800);
+        }
+
+        function updateHud() {
+            document.getElementById('hud-gold').innerText = STATE.gold;
+            document.getElementById('hud-atk').innerText = Math.round(player.dmg);
+            document.getElementById('hud-armor').innerText = Math.round(player.armor);
+            document.getElementById('hud-aspd').innerText = player.aps;
+            document.getElementById('hud-hp-text').innerText = `${Math.floor(player.hp)}/${player.maxHp}`;
+            document.getElementById('hud-hp-bar').style.width = (player.hp / player.maxHp * 100) + '%';
+            
+            const targetPanel = document.getElementById('target-panel');
+            if (STATE.selectedUnit && !STATE.selectedUnit.dead) {
+                targetPanel.classList.remove('opacity-0');
+                const t = STATE.selectedUnit;
+                document.getElementById('target-name').innerText = t.type.toUpperCase();
+                document.getElementById('target-hp-text').innerText = `${Math.floor(t.hp)}/${t.maxHp}`;
+                document.getElementById('target-hp-bar').style.width = (t.hp / t.maxHp * 100) + '%';
+                document.getElementById('target-atk').innerText = Math.round(t.dmg);
+                document.getElementById('target-armor').innerText = Math.round(t.armor);
+                const icon = document.getElementById('target-icon');
+                if (t.type === 'base') icon.className = 'fas fa-gem';
+                else if (t.type === 'tower') icon.className = 'fas fa-chess-rook';
+                else icon.className = 'fas fa-skull';
+            } else {
+                targetPanel.classList.add('opacity-0');
+            }
+        }
+
+        function gameOver(win) {
+            STATE.active = false;
+            AudioSys.win();
+            document.getElementById('game-over-overlay').classList.remove('hidden');
+            document.getElementById('game-over-overlay').classList.add('flex');
+            const title = document.getElementById('game-result-title');
+            if (win) title.innerText = "VICTORY";
+            else {
+                title.innerText = "DEFEAT";
+                title.className = "text-7xl font-black mb-2 text-gray-500";
+            }
+        }
+
+        const items = [
+            { id: 1, n: "ดาบแห่งพลัง", d: "+20 ATK", c: 200, type: 'atk', val: 20, i: "fa-khanda", cl: "text-red-400" },
+            { id: 2, n: "เกราะเหล็ก", d: "+20 Armor", c: 200, type: 'armor', val: 20, i: "fa-shield-alt", cl: "text-blue-400" },
+            { id: 3, n: "มีดสายฟ้า", d: "+10% Speed", c: 200, type: 'aspd', val: 6, i: "fa-bolt", cl: "text-yellow-400" },
+            { id: 4, n: "คริสตัลชีวิต", d: "+300 HP", c: 200, type: 'hp', val: 300, i: "fa-heart", cl: "text-green-400" }
+        ];
+
+        function generateShop() {
+            const grid = document.getElementById('shop-grid');
+            grid.innerHTML = '';
+            items.forEach(item => {
+                const b = document.createElement('button');
+                b.className = 'flex flex-col items-center bg-slate-800 p-2 rounded-xl border-2 border-slate-600 hover:bg-slate-700 active:bg-slate-600 transition justify-between btn-press group shop-card relative overflow-hidden';
+                b.style.height = "100px";
+                b.onclick = () => buy(item);
+                b.innerHTML = `
+                    <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
+                    <div class="text-2xl ${item.cl} drop-shadow-lg group-hover:scale-110 transition-transform"><i class="fas ${item.i}"></i></div>
+                    <div class="text-[10px] font-bold text-slate-100 uppercase tracking-wide z-10 text-center leading-tight">${item.n}</div>
+                    <div class="text-[9px] text-slate-400 z-10">${item.d}</div>
+                    <div class="bg-black/60 px-2 py-0.5 rounded text-[10px] text-yellow-400 font-mono font-bold z-10 border border-yellow-500/30">${item.c}G</div>
+                `;
+                grid.appendChild(b);
+            });
+        }
+
+        function buy(item) {
+            if (STATE.gold >= item.c) {
+                STATE.gold -= item.c;
+                if (item.type === 'atk') player.dmg += item.val;
+                if (item.type === 'hp') { player.maxHp += item.val; player.hp += item.val; }
+                if (item.type === 'armor') player.armor += item.val;
+                if (item.type === 'aspd') player.atkSpeedBase = Math.max(10, player.atkSpeedBase - item.val);
+                updateHud();
+                AudioSys.buy();
+                createFloatingText(player.x, player.y, "UPGRADE!", "#10b981");
+            } else {
+                const b = event.currentTarget; b.classList.add('border-red-500'); setTimeout(() => b.classList.remove('border-red-500'), 200);
+            }
+        }
+
+        function newMath() {
+            const ops = ['+', '-'];
+            const op = ops[Math.floor(Math.random()*ops.length)];
+            
+            // Determine Answer Range based on Difficulty
+            let minAns = 1, maxAns = 9;
+            if (STATE.difficulty === 'medium') { minAns = 10; maxAns = 99; }
+            if (STATE.difficulty === 'hard') { minAns = 100; maxAns = 999; }
+            
+            // Generate Answer First
+            currAns = Math.floor(Math.random() * (maxAns - minAns + 1)) + minAns;
+            
+            // Reverse Engineer Operands
+            let a, b;
+            if (op === '+') {
+                // a + b = ans -> a < ans
+                a = Math.floor(Math.random() * currAns); 
+                b = currAns - a;
+            } else {
+                // a - b = ans -> a = ans + b
+                // Keep b reasonably small relative to ans for harder modes
+                let maxB = STATE.difficulty === 'easy' ? 9 : (STATE.difficulty === 'medium' ? 50 : 200);
+                b = Math.floor(Math.random() * maxB) + 1;
+                a = currAns + b;
+            }
+
+            document.getElementById('math-q').innerText = `${a} ${op} ${b} = ?`;
+            
+            // Generate Fake Answers
+            let opts = [currAns];
+            while (opts.length < 4) {
+                // Variation range depends on difficulty
+                let range = STATE.difficulty === 'easy' ? 5 : (STATE.difficulty === 'medium' ? 20 : 50);
+                let f = currAns + Math.floor(Math.random() * (range * 2)) - range;
+                if (f >= 0 && !opts.includes(f)) opts.push(f);
+            }
+            opts.sort(() => Math.random() - 0.5);
+            
+            const grid = document.getElementById('math-options-grid');
+            grid.innerHTML = '';
+            opts.forEach(o => {
+                const b = document.createElement('button');
+                b.className = 'bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-lg border-b-2 border-slate-900 active:border-b-0 active:translate-y-0.5 transition-all shadow';
+                b.innerText = o;
+                b.onclick = (e) => checkMath(o, e.target);
+                grid.appendChild(b);
+            });
+        }
+        
+        function checkMath(ans, btn) {
+            if (ans === currAns) {
+                STATE.gold += 50; updateHud();
+                AudioSys.coin();
+                btn.classList.add('bg-green-500', 'border-green-700'); setTimeout(newMath, 150);
+            } else {
+                btn.classList.add('bg-red-500', 'border-red-700', 'animate-pulse'); setTimeout(newMath, 400);
+            }
+        }
+        
+        // Initial Call
+        init();
+        
     </script>
 </body>
 </html>
