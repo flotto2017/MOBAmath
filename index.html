@@ -300,7 +300,7 @@
 
         const CONFIG = { mapW: 3800, mapH: 1400, baseHp: 5000, towerHp: 1500, spawnRate: 10000, fountainRadius: 350, fountainBlueX: 100, fountainRedX: 3700 };
         const ASSETS = { colors: { grass: '#064e3b', grassDark: '#022c22', lane: '#78716c', river: '#0ea5e9' } };
-        const STATE = { active: false, lastTime: 0, gold: 200, cam: { x: 0, y: 0 }, target: null, selectedUnit: null, shake: 0, difficulty: 'easy', gameMode: 'single' };
+        const STATE = { active: false, lastTime: 0, gold: 200, cam: { x: 0, y: 0 }, target: null, selectedUnit: null, shake: 0, difficulty: 'easy', gameMode: 'single', scale: 1 };
         
         // Joystick State
         const JOY = { active: false, dx: 0, dy: 0, id: null };
@@ -353,13 +353,17 @@
         function createDamageText(x, y, val, color) {
             if(Math.random()>0.8)return;
             const el=document.createElement('div'); el.className='damage-text'; el.style.color=color; el.innerText=Math.round(val);
-            const sx=x-STATE.cam.x, sy=y-STATE.cam.y;
+            // Adjusted screen position calculation for scaling
+            const sx = (x - STATE.cam.x) * STATE.scale;
+            const sy = (y - STATE.cam.y) * STATE.scale;
+            
             if(sx>0&&sx<canvas.width&&sy>0&&sy<canvas.height) { el.style.left=sx+'px'; el.style.top=sy+'px'; gameArea.appendChild(el); setTimeout(()=>el.remove(),600); }
         }
 
         function createFloatingText(x, y, text, color) {
             const el=document.createElement('div'); el.className='damage-text'; el.style.color=color; el.innerText=text; el.style.fontSize='30px'; el.style.zIndex='101';
-            const sx=x-STATE.cam.x, sy=y-STATE.cam.y;
+             const sx = (x - STATE.cam.x) * STATE.scale;
+             const sy = (y - STATE.cam.y) * STATE.scale;
             el.style.left=sx+'px'; el.style.top=(sy-30)+'px'; gameArea.appendChild(el); setTimeout(()=>el.remove(),800);
         }
 
@@ -531,8 +535,20 @@
                     
                     if(STATE.shake>0) STATE.shake*=0.9;
                     if(STATE.shake<0.5) STATE.shake=0;
-                    STATE.cam.x = Math.max(0, Math.min(this.x-canvas.width/2, CONFIG.mapW-canvas.width)) + (Math.random()-0.5)*STATE.shake;
-                    STATE.cam.y = Math.max(0, Math.min(this.y-canvas.height/2, CONFIG.mapH-canvas.height)) + (Math.random()-0.5)*STATE.shake;
+                    
+                    // Center camera logic in update, but actual clamp happens in Draw/Resize calculations mainly,
+                    // but we store it in STATE.cam
+                    // IMPORTANT: Limit camera so it doesn't show black bars if possible
+                    // But our canvas is full screen, so we just center on player.
+                    
+                    // Determine max scroll
+                    // We need to know current visible width/height in world units
+                    // Visible Width = canvas.width / STATE.scale
+                    const visW = canvas.width / STATE.scale;
+                    const visH = canvas.height / STATE.scale;
+                    
+                    STATE.cam.x = Math.max(0, Math.min(this.x - visW/2, CONFIG.mapW - visW)) + (Math.random()-0.5)*STATE.shake;
+                    STATE.cam.y = Math.max(0, Math.min(this.y - visH/2, CONFIG.mapH - visH)) + (Math.random()-0.5)*STATE.shake;
                 }
                 super.update();
             }
@@ -603,8 +619,8 @@
             player = new Hero(team);
             enemyHero = new Hero(team==='blue'?'red':'blue');
 
-            STATE.cam.x = Math.max(0, Math.min(player.x - canvas.width/2, CONFIG.mapW - canvas.width));
-            STATE.cam.y = Math.max(0, Math.min(player.y - canvas.height/2, CONFIG.mapH - canvas.height));
+            // Initial resize to set scale before loop
+            resize();
             
             generateShop(); newMath(); loop(performance.now());
         }
@@ -635,7 +651,7 @@
             for(let i=0;i<20;i++) { if(opts.length>=4)break; let f=currAns+Math.floor(Math.random()*20)-10; if(!opts.includes(f)&&f>=0)opts.push(f); }
             opts.sort(()=>Math.random()-0.5).forEach(o=>{
                 const btn=document.createElement('button');
-                btn.className='bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-lg md:text-2xl border-b-4 border-slate-900 active:translate-y-1 transition-all shadow';
+                btn.className='bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg text-lg md:text-2xl border-b-4 border-slate-900 active:translate-y-0.5 transition-all shadow';
                 btn.innerText=o;
                 btn.onclick=()=> { if(o===currAns){ STATE.gold+=50; updateHud(); newMath(); AudioSys.coin(); } else { btn.classList.add('bg-red-600'); setTimeout(newMath,500); } };
                 grid.appendChild(btn);
@@ -655,7 +671,7 @@
                 const b=document.createElement('button');
                 b.className='flex flex-col items-center bg-slate-800 p-2 rounded-xl border-2 border-slate-600 hover:bg-slate-700 active:bg-slate-600 transition justify-between btn-press group shop-card h-24 relative overflow-hidden';
                 b.onclick=()=>{ if(STATE.gold>=it.c){ STATE.gold-=it.c; it.act(); updateHud(); AudioSys.buy(); createFloatingText(player.x,player.y,"UPGRADE!","#10b981"); } };
-                b.innerHTML=`<div class="text-3xl ${it.cl} drop-shadow-md mt-1"><i class="fas ${it.i}"></i></div><div class="text-sm font-bold text-slate-200">${it.n}</div><div class="bg-black/60 px-2 rounded text-xs text-yellow-400 font-mono">${it.c}G</div>`;
+                b.innerHTML=`<div class="text-3xl ${it.cl} drop-shadow-md mt-1"><i class="fas ${it.i}"></i></div><div class="text-[10px] font-bold text-slate-100 uppercase tracking-wide z-10 text-center leading-tight">${it.n}</div><div class="bg-black/60 px-2 rounded text-xs text-yellow-400 font-mono">${it.c}G</div>`;
                 grid.appendChild(b);
             });
         }
@@ -686,6 +702,8 @@
             // Draw
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.save();
+            // Scale and Translate
+            ctx.scale(STATE.scale, STATE.scale);
             ctx.translate(-STATE.cam.x, -STATE.cam.y);
             
             // Map
@@ -718,7 +736,13 @@
                 else if(e.type==='tower') mmCtx.fillRect(mx-2,my-2,4,4);
                 else { mmCtx.beginPath(); mmCtx.arc(mx,my,1,0,Math.PI*2); mmCtx.fill(); }
             });
-            const vx=STATE.cam.x*(mw/CONFIG.mapW), vy=STATE.cam.y*(mh/CONFIG.mapH), vw=canvas.width*(mw/CONFIG.mapW), vh=canvas.height*(mh/CONFIG.mapH);
+            // Minimap Viewport Rect
+            const visW = canvas.width / STATE.scale;
+            const visH = canvas.height / STATE.scale;
+            const vx=STATE.cam.x*(mw/CONFIG.mapW);
+            const vy=STATE.cam.y*(mh/CONFIG.mapH);
+            const vw=visW*(mw/CONFIG.mapW);
+            const vh=visH*(mh/CONFIG.mapH);
             mmCtx.strokeStyle='#fbbf24'; mmCtx.lineWidth=1; mmCtx.strokeRect(vx,vy,vw,vh);
         }
 
@@ -781,8 +805,9 @@
         canvas.addEventListener('mousedown', (e) => {
             if(!player) return;
             const rect = canvas.getBoundingClientRect();
-            const worldX = e.clientX - rect.left + STATE.cam.x;
-            const worldY = e.clientY - rect.top + STATE.cam.y;
+            // Adjusted world click calculation for Scale
+            const worldX = (e.clientX - rect.left) / STATE.scale + STATE.cam.x;
+            const worldY = (e.clientY - rect.top) / STATE.scale + STATE.cam.y;
             handleInput(worldX, worldY);
         });
         
@@ -790,8 +815,9 @@
             if(JOY.active) return; // Ignore if using joystick
             const rect = canvas.getBoundingClientRect();
             const touch = e.touches[0];
-            const worldX = touch.clientX - rect.left + STATE.cam.x;
-            const worldY = touch.clientY - rect.top + STATE.cam.y;
+            // Adjusted world touch calculation for Scale
+            const worldX = (touch.clientX - rect.left) / STATE.scale + STATE.cam.x;
+            const worldY = (touch.clientY - rect.top) / STATE.scale + STATE.cam.y;
             handleInput(worldX, worldY);
         });
 
@@ -807,10 +833,15 @@
                 STATE.target = { x: worldX, y: worldY };
                 const marker = document.createElement('div');
                 marker.className = 'absolute w-4 h-4 border-2 border-green-400 rounded-full animate-ping pointer-events-none';
-                // Adjust for cam
-                const rect = canvas.getBoundingClientRect();
-                marker.style.left = (worldX - STATE.cam.x) + 'px';
-                marker.style.top = (worldY - STATE.cam.y) + 'px';
+                // Marker is DOM based (screen coords)
+                // Need to convert back to screen for initial placement? 
+                // Or update marker in loop?
+                // For simple feedback, calculate screen pos once
+                const screenX = (worldX - STATE.cam.x) * STATE.scale;
+                const screenY = (worldY - STATE.cam.y) * STATE.scale;
+                
+                marker.style.left = screenX + 'px';
+                marker.style.top = screenY + 'px';
                 gameArea.appendChild(marker);
                 setTimeout(() => marker.remove(), 500);
             }
@@ -830,11 +861,25 @@
             mmCanvas.height = mmRect.height;
             MM_SCALE_X = mmCanvas.width / CONFIG.mapW;
             MM_SCALE_Y = mmCanvas.height / CONFIG.mapH;
+            
+            // --- AUTO SCALING LOGIC ---
+            // Goal: Show at least ~800 world units height or ~1200 width depending on aspect
+            // If mobile portrait: width is small, we need to zoom out to see side-to-side or clamp?
+            // Let's ensure a fixed vertical field of view for consistent gameplay
+            // Target visible height: 800 units
+            const targetVisibleHeight = 800;
+            STATE.scale = canvas.height / targetVisibleHeight;
+            
+            // Safety clamp for very wide/tall screens
+            // Min scale 0.5 (zoom out), Max 1.2 (zoom in)
+            STATE.scale = Math.max(0.5, Math.min(1.5, STATE.scale));
+
             if (!STATE.active && player) {
                 draw(); drawMinimap();
             }
         }
         window.addEventListener('resize', resize);
+        // Initial resize happens in init/startGame sequence too
         setTimeout(resize, 100);
 
     </script>
