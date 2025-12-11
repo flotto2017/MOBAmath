@@ -136,11 +136,9 @@
         <div id="game-area">
             <canvas id="game-canvas" class="block w-full h-full"></canvas>
             
-            <!-- JOYSTICK (New) -->
+            <!-- JOYSTICK -->
             <div id="joystick-zone">
-                <div id="joystick-bg">
-                    <div id="joystick-stick"></div>
-                </div>
+                <div id="joystick-bg"><div id="joystick-stick"></div></div>
             </div>
 
             <!-- 1. MAIN MENU -->
@@ -304,7 +302,7 @@
         const ASSETS = { colors: { grass: '#064e3b', grassDark: '#022c22', lane: '#78716c', river: '#0ea5e9' } };
         const STATE = { active: false, lastTime: 0, gold: 200, cam: { x: 0, y: 0 }, target: null, selectedUnit: null, shake: 0, difficulty: 'easy', gameMode: 'single' };
         
-        // Joystick State - Defined ONCE here
+        // Joystick State
         const JOY = { active: false, dx: 0, dy: 0, id: null };
 
         const canvas = document.getElementById('game-canvas'), ctx = canvas.getContext('2d');
