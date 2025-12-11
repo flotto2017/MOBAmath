@@ -9,9 +9,18 @@
     
     <style>
         body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #020617; }
+        
+        #main-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh; 
+            width: 100vw;
+        }
+        
         #game-area { flex-grow: 1; position: relative; overflow: hidden; background-color: #052e16; cursor: crosshair; touch-action: none; }
         
-        #ui-panel { height: 280px; background-color: #0f172a; border-top: 4px solid #1e293b; display: flex; flex-direction: row; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); z-index: 50; }
+        #ui-panel { height: 200px; background-color: #0f172a; border-top: 4px solid #1e293b; display: flex; flex-direction: row; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); z-index: 50; }
 
         .damage-text { position: absolute; color: white; font-weight: 900; font-size: 24px; pointer-events: none; animation: floatPop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; text-shadow: 2px 2px 0px #000; z-index: 100; -webkit-text-stroke: 1.5px black; }
         @media (min-width: 768px) { .damage-text { font-size: 36px; } }
@@ -30,16 +39,16 @@
 
         /* JOYSTICK STYLES */
         #joystick-zone {
-            position: absolute; bottom: 20px; left: 20px; width: 150px; height: 150px; z-index: 40;
+            position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; z-index: 40;
             display: flex; align-items: center; justify-content: center;
             pointer-events: auto; /* Enable touch */
         }
         #joystick-bg {
-            width: 120px; height: 120px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3);
+            width: 100px; height: 100px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%; position: relative; backdrop-filter: blur(4px);
         }
         #joystick-stick {
-            width: 50px; height: 50px; background: rgba(59, 130, 246, 0.8); border: 2px solid white;
+            width: 40px; height: 40px; background: rgba(59, 130, 246, 0.8); border: 2px solid white;
             border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
             transition: transform 0.1s;
@@ -136,6 +145,11 @@
         <div id="game-area">
             <canvas id="game-canvas" class="block w-full h-full"></canvas>
             
+            <!-- Fit Screen Button -->
+            <button onclick="toggleFullScreen()" class="absolute top-2 left-2 z-50 bg-black/50 hover:bg-black/80 text-white text-xs px-2 py-1 rounded border border-white/20 pointer-events-auto">
+                <i class="fas fa-expand"></i> FIT SCREEN
+            </button>
+
             <!-- JOYSTICK -->
             <div id="joystick-zone">
                 <div id="joystick-bg"><div id="joystick-stick"></div></div>
@@ -193,46 +207,46 @@
                     <div class="text-white text-5xl font-bold">Respawn: <span id="respawn-timer" class="text-yellow-400 font-mono text-7xl">10</span>s</div>
                 </div>
 
-                <button onclick="startPlayerRecall()" id="btn-recall" class="absolute bottom-6 right-6 z-30 w-24 h-24 md:w-28 md:h-28 rounded-full bg-blue-600 border-4 border-blue-400 text-white shadow-xl hover:bg-blue-500 pointer-events-auto flex flex-col items-center justify-center group transition-all active:scale-95">
-                    <i class="fas fa-undo-alt text-3xl mb-1 group-hover:-rotate-45 transition-transform"></i>
-                    <span class="text-sm font-bold uppercase">Recall</span>
+                <button onclick="startPlayerRecall()" id="btn-recall" class="absolute bottom-6 right-6 z-30 w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-600 border-4 border-blue-400 text-white shadow-xl hover:bg-blue-500 pointer-events-auto flex flex-col items-center justify-center group transition-all active:scale-95">
+                    <i class="fas fa-undo-alt text-2xl mb-0.5 group-hover:-rotate-45 transition-transform"></i>
+                    <span class="text-[10px] font-bold uppercase">Recall</span>
                     <div id="recall-spinner" class="absolute inset-0 rounded-full border-4 border-white border-t-transparent animate-spin hidden"></div>
                 </button>
 
                 <!-- Player Status (Big Text) -->
-                <div class="absolute top-4 left-4 z-20 flex gap-3 pointer-events-none select-none">
-                    <div class="relative w-24 h-24 md:w-28 md:h-28 rounded-xl border-4 border-slate-700 shadow-2xl overflow-hidden bg-slate-800">
-                        <div class="absolute inset-0 flex items-center justify-center text-5xl text-blue-400"><i class="fas fa-user-ninja"></i></div>
-                        <div class="absolute bottom-0 w-full text-center bg-black/70 text-sm md:text-base text-white font-bold py-1">LV.<span id="hud-level">1</span></div>
+                <div class="absolute top-4 right-4 md:right-auto md:left-4 z-20 flex gap-3 pointer-events-none select-none">
+                    <div class="relative w-20 h-20 md:w-24 md:h-24 rounded-xl border-4 border-slate-700 shadow-2xl overflow-hidden bg-slate-800">
+                        <div class="absolute inset-0 flex items-center justify-center text-4xl text-blue-400"><i class="fas fa-user-ninja"></i></div>
+                        <div class="absolute bottom-0 w-full text-center bg-black/70 text-xs md:text-sm text-white font-bold py-1">LV.<span id="hud-level">1</span></div>
                     </div>
-                    <div class="flex flex-col justify-center gap-2 min-w-[200px] md:min-w-[240px]">
-                        <div class="h-8 bg-gray-900 rounded border border-gray-600 relative overflow-hidden">
+                    <div class="flex flex-col justify-center gap-1.5 min-w-[160px] md:min-w-[200px]">
+                        <div class="h-6 bg-gray-900 rounded border border-gray-600 relative overflow-hidden">
                             <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-green-600 to-green-400 w-full transition-all duration-300"></div>
-                            <span class="absolute inset-0 text-sm md:text-base text-white flex items-center justify-center font-bold drop-shadow-md tracking-wider">
-                                <i class="fas fa-heart text-red-500 mr-2"></i> <span id="hud-hp-text">500/500</span>
+                            <span class="absolute inset-0 text-xs md:text-sm text-white flex items-center justify-center font-bold drop-shadow-md tracking-wider">
+                                <i class="fas fa-heart text-red-500 mr-1.5"></i> <span id="hud-hp-text">500/500</span>
                             </span>
                         </div>
-                        <div class="grid grid-cols-2 gap-x-3 gap-y-2 bg-black/60 p-2 rounded border border-slate-600/50 backdrop-blur-sm">
-                            <div class="flex items-center text-sm md:text-base text-white font-bold"><i class="fas fa-khanda text-red-400 w-6"></i> <span id="hud-atk">45</span></div>
-                            <div class="flex items-center text-sm md:text-base text-white font-bold"><i class="fas fa-shield-alt text-blue-400 w-6"></i> <span id="hud-armor">0</span></div>
-                            <div class="flex items-center text-sm md:text-base text-white font-bold"><i class="fas fa-bolt text-yellow-400 w-6"></i> <span id="hud-aspd">1.0</span></div>
-                            <div class="flex items-center text-sm md:text-base text-white font-bold"><i class="fas fa-coins text-yellow-500 w-6"></i> <span id="hud-gold">0</span></div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 bg-black/60 p-1.5 rounded border border-slate-600/50 backdrop-blur-sm">
+                            <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-khanda text-red-400 w-5"></i> <span id="hud-atk">45</span></div>
+                            <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-shield-alt text-blue-400 w-5"></i> <span id="hud-armor">0</span></div>
+                            <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-bolt text-yellow-400 w-5"></i> <span id="hud-aspd">1.0</span></div>
+                            <div class="flex items-center text-xs md:text-sm text-white font-bold"><i class="fas fa-coins text-yellow-500 w-5"></i> <span id="hud-gold">0</span></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Target Status -->
-                <div id="target-panel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-3 pointer-events-none select-none transition-opacity duration-200 opacity-0 bg-black/70 backdrop-blur-md p-3 rounded-xl border border-red-500/30 min-w-[200px] md:min-w-[280px]">
-                    <div class="relative w-16 h-16 rounded-lg border-2 border-red-500 overflow-hidden bg-slate-800 shrink-0">
-                        <div class="absolute inset-0 flex items-center justify-center text-4xl text-red-400"><i id="target-icon" class="fas fa-skull"></i></div>
+                <div id="target-panel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-3 pointer-events-none select-none transition-opacity duration-200 opacity-0 bg-black/70 backdrop-blur-md p-2 rounded-xl border border-red-500/30 min-w-[150px] md:min-w-[200px]">
+                    <div class="relative w-12 h-12 rounded-lg border-2 border-red-500 overflow-hidden bg-slate-800 shrink-0">
+                        <div class="absolute inset-0 flex items-center justify-center text-3xl text-red-400"><i id="target-icon" class="fas fa-skull"></i></div>
                     </div>
                     <div class="flex flex-col justify-center w-full">
-                        <div class="text-sm md:text-base text-red-200 font-bold uppercase tracking-wider mb-1" id="target-name">Enemy</div>
-                        <div class="h-5 bg-gray-900 rounded-full border border-gray-600 relative overflow-hidden mb-1">
+                        <div class="text-xs md:text-sm text-red-200 font-bold uppercase tracking-wider mb-0.5" id="target-name">Enemy</div>
+                        <div class="h-4 bg-gray-900 rounded-full border border-gray-600 relative overflow-hidden mb-1">
                             <div id="target-hp-bar" class="h-full bg-red-600 w-full transition-all duration-200"></div>
-                            <div class="absolute inset-0 flex items-center justify-center"><span id="target-hp-text" class="text-xs font-bold text-white drop-shadow-md"></span></div>
+                            <div class="absolute inset-0 flex items-center justify-center"><span id="target-hp-text" class="text-[10px] font-bold text-white drop-shadow-md"></span></div>
                         </div>
-                        <div class="flex gap-4 text-xs md:text-sm text-white font-bold">
+                        <div class="flex gap-3 text-[10px] md:text-xs text-white font-bold">
                             <span>ATK: <span id="target-atk" class="text-red-300">10</span></span>
                             <span>DEF: <span id="target-armor" class="text-blue-300">0</span></span>
                         </div>
@@ -255,31 +269,32 @@
         <div id="ui-panel">
             <!-- SHOP (Left) -->
             <div class="flex-1 bg-slate-900 border-r-2 border-slate-700 flex flex-col p-2 min-w-0">
-                <div class="flex justify-between items-center mb-2 px-2 text-white">
-                    <h3 class="font-bold text-base md:text-lg flex items-center gap-2"><i class="fas fa-store text-indigo-400"></i> ร้านค้า</h3>
-                    <span class="text-sm md:text-base text-yellow-400 font-mono"><i class="fas fa-coins"></i> <span id="shop-gold-display">0</span></span>
+                <div class="flex justify-between items-center mb-1 px-1 text-white">
+                    <h3 class="font-bold text-xs md:text-sm flex items-center gap-1"><i class="fas fa-store text-indigo-400"></i> ร้านค้า</h3>
+                    <!-- Added Gold Display here for visibility in shop -->
+                    <span class="text-xs text-yellow-400 font-mono"><i class="fas fa-coins"></i> <span id="shop-gold-display">0</span></span>
                 </div>
-                <div id="shop-grid" class="grid grid-cols-2 gap-2 h-full content-start overflow-y-auto pb-2 px-1"></div>
+                <div id="shop-grid" class="grid grid-cols-2 gap-1.5 h-full content-start overflow-y-auto pb-1"></div>
             </div>
 
             <!-- MINIMAP (Center) -->
-            <div class="w-[280px] md:w-[360px] bg-slate-950 border-r-2 border-slate-700 flex flex-col items-center justify-center relative p-1 shrink-0">
+            <div class="w-[200px] md:w-[280px] bg-slate-950 border-r-2 border-slate-700 flex flex-col items-center justify-center relative p-1 shrink-0">
                 <canvas id="minimap-canvas" class="border border-slate-600 rounded bg-black/50 cursor-crosshair shadow-inner w-full h-full object-contain"></canvas>
-                <div class="absolute bottom-2 right-2 text-xs text-white/50 pointer-events-none font-bold bg-black/40 px-2 rounded backdrop-blur-sm">MAP VIEW</div>
+                <div class="absolute bottom-1 right-1 text-[8px] text-white/50 pointer-events-none font-bold bg-black/40 px-1 rounded backdrop-blur-sm">MAP VIEW</div>
             </div>
             
             <!-- MATH (Right) -->
-            <div class="flex-1 bg-slate-800 flex flex-col p-3 relative overflow-hidden min-w-0 border-l-2 border-slate-700">
+            <div class="flex-1 bg-slate-800 flex flex-col p-2 relative overflow-hidden min-w-0 border-l-2 border-slate-700">
                 <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
-                <div class="flex justify-between items-center mb-3 text-white z-10">
-                    <h3 class="font-bold text-base md:text-lg text-yellow-400 flex items-center gap-2"><i class="fas fa-brain"></i> Farm Gold</h3>
-                    <span class="text-sm font-bold bg-yellow-400/20 px-3 py-1 rounded text-yellow-300 border border-yellow-400/30">+50G</span>
+                <div class="flex justify-between items-center mb-2 text-white z-10">
+                    <h3 class="font-bold text-xs md:text-sm text-yellow-400 flex items-center gap-1"><i class="fas fa-brain"></i> Farm Gold</h3>
+                    <span class="text-[10px] font-bold bg-yellow-400/20 px-2 py-0.5 rounded text-yellow-300 border border-yellow-400/30">+50G</span>
                 </div>
-                <div class="flex-grow flex flex-col justify-center gap-3 z-10">
-                    <div class="bg-black/50 border-2 border-slate-600 rounded-xl p-4 text-center shadow-inner">
-                        <span id="math-q" class="text-4xl md:text-5xl font-mono font-black text-white tracking-widest drop-shadow-md">?</span>
+                <div class="flex-grow flex flex-col justify-center gap-2 z-10">
+                    <div class="bg-black/50 border-2 border-slate-600 rounded-lg p-2 text-center shadow-inner">
+                        <span id="math-q" class="text-2xl font-mono font-black text-white tracking-widest drop-shadow-md">?</span>
                     </div>
-                    <div id="math-options-grid" class="grid grid-cols-2 gap-3 h-28"></div>
+                    <div id="math-options-grid" class="grid grid-cols-2 gap-2 h-20"></div>
                 </div>
             </div>
         </div>
@@ -376,6 +391,26 @@
             if (win) title.innerText = "VICTORY";
             else { title.innerText = "DEFEAT"; title.className = "text-7xl font-black mb-2 text-gray-500"; }
         }
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+        
+        function startPlayerRecall() {
+            if (player && !player.dead && !player.isRecalling) {
+                player.isRecalling = true;
+                player.recallTimer = 180; // 3 sec
+                document.getElementById('recall-spinner').classList.remove('hidden');
+            }
+        }
 
         // --- CLASSES ---
         class Entity {
@@ -428,7 +463,7 @@
                 this.x+=Math.cos(a)*this.speed; this.y+=Math.sin(a)*this.speed;
             }
             fire(t) {
-                projectiles.push({x:this.x, y:this.y, tx:t, speed:15, color:this.team==='blue'?'#60a5fa':'#f87171'});
+                projectiles.push({x:this.x, y:this.y, tx:t, speed:15, color:this.team==='blue'?'#60a5fa':'#f87171', dmg: this.dmg});
                 if(this===player) AudioSys.shoot();
             }
             takeDamage(amt) {
@@ -664,7 +699,7 @@
                 {n:"ดาบ",d:"+20 ATK",c:200,i:"fa-khanda",cl:"text-red-400",act:()=>{player.dmg+=20;}},
                 {n:"เกราะ",d:"+20 DEF",c:200,i:"fa-shield-alt",cl:"text-blue-400",act:()=>{player.armor+=20;}},
                 {n:"รองเท้า",d:"+SPD",c:200,i:"fa-bolt",cl:"text-yellow-400",act:()=>{player.atkSpeedBase=Math.max(20,player.atkSpeedBase-10);}},
-                {n:"ยา",d:"+HP",c:100,i:"fa-heart",cl:"text-green-400",act:()=>{player.hp=Math.min(player.hp+200,player.maxHp);}}
+                {n:"หัวใจ",d:"+200 MaxHP",c:300,i:"fa-heart",cl:"text-green-400",act:()=>{player.maxHp+=200; player.hp+=200;}}
             ];
             grid.innerHTML='';
             items.forEach(it=>{
@@ -736,13 +771,7 @@
                 else if(e.type==='tower') mmCtx.fillRect(mx-2,my-2,4,4);
                 else { mmCtx.beginPath(); mmCtx.arc(mx,my,1,0,Math.PI*2); mmCtx.fill(); }
             });
-            // Minimap Viewport Rect
-            const visW = canvas.width / STATE.scale;
-            const visH = canvas.height / STATE.scale;
-            const vx=STATE.cam.x*(mw/CONFIG.mapW);
-            const vy=STATE.cam.y*(mh/CONFIG.mapH);
-            const vw=visW*(mw/CONFIG.mapW);
-            const vh=visH*(mh/CONFIG.mapH);
+            const vx=STATE.cam.x*(mw/CONFIG.mapW), vy=STATE.cam.y*(mh/CONFIG.mapH), vw=canvas.width*(mw/CONFIG.mapW), vh=canvas.height*(mh/CONFIG.mapH);
             mmCtx.strokeStyle='#fbbf24'; mmCtx.lineWidth=1; mmCtx.strokeRect(vx,vy,vw,vh);
         }
 
@@ -863,15 +892,10 @@
             MM_SCALE_Y = mmCanvas.height / CONFIG.mapH;
             
             // --- AUTO SCALING LOGIC ---
-            // Goal: Show at least ~800 world units height or ~1200 width depending on aspect
-            // If mobile portrait: width is small, we need to zoom out to see side-to-side or clamp?
-            // Let's ensure a fixed vertical field of view for consistent gameplay
-            // Target visible height: 800 units
             const targetVisibleHeight = 800;
             STATE.scale = canvas.height / targetVisibleHeight;
             
             // Safety clamp for very wide/tall screens
-            // Min scale 0.5 (zoom out), Max 1.2 (zoom in)
             STATE.scale = Math.max(0.5, Math.min(1.5, STATE.scale));
 
             if (!STATE.active && player) {
@@ -879,7 +903,6 @@
             }
         }
         window.addEventListener('resize', resize);
-        // Initial resize happens in init/startGame sequence too
         setTimeout(resize, 100);
 
     </script>
