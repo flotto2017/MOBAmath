@@ -20,7 +20,6 @@
         
         #game-area { flex-grow: 1; position: relative; overflow: hidden; background-color: #052e16; cursor: crosshair; touch-action: none; }
         
-        /* UI Panel Height 130px */
         #ui-panel { 
             height: 130px; 
             min-height: 130px;
@@ -64,13 +63,13 @@
             transition: transform 0.1s;
         }
 
-        /* Minimap Styling - Top Left */
+        /* Minimap Styling */
         #minimap-container {
-            position: absolute; top: 0; left: 0; z-index: 60;
+            position: absolute; top: 0; right: 0; z-index: 60;
             background: rgba(15, 23, 42, 0.8);
-            border-right: 2px solid #334155;
+            border-left: 2px solid #334155;
             border-bottom: 2px solid #334155;
-            border-bottom-right-radius: 10px;
+            border-bottom-left-radius: 10px;
             overflow: hidden;
             width: 180px; height: 100px;
         }
@@ -80,9 +79,9 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, getDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
+        let firebaseConfig = {
             apiKey: "AIzaSyDSRWRHZ0tSWBolCjtzcz9SHtozIimqXNQ",
             authDomain: "mobamath-d7343.firebaseapp.com",
             projectId: "mobamath-d7343",
@@ -96,41 +95,66 @@
         let db, auth, user, roomId;
         let isHost = false;
         let unsubscribeRoom = null;
+        let app;
+        let lastSend = 0;
 
-        try {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            signInAnonymously(auth).catch(e => console.warn("Offline:", e));
-            onAuthStateChanged(auth, (u) => { user = u; });
-        } catch (e) { console.warn("Firebase Init Failed", e); }
+        async function initFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                await signInAnonymously(auth);
+                onAuthStateChanged(auth, (u) => { user = u; });
+                return true;
+            } catch (e) { 
+                console.warn("Firebase Init Failed:", e);
+                return false;
+            }
+        }
+        
+        initFirebase();
 
         window.NetworkAPI = {
             createRoom: async (difficulty) => {
-                if (!user || !db) return null;
-                roomId = Math.floor(Math.random() * 900 + 100).toString();
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                await setDoc(roomRef, { host: user.uid, guest: null, status: 'waiting', difficulty: difficulty, lastUpdate: Date.now() });
-                isHost = true;
-                window.NetworkAPI.listen(roomId);
-                return roomId;
+                const currentUser = auth?.currentUser;
+                if (!db || !currentUser) { forceOfflineStart(difficulty); return null; }
+                
+                try {
+                    roomId = Math.floor(Math.random() * 9000 + 1000).toString();
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+                    await setDoc(roomRef, { 
+                        host: currentUser.uid, 
+                        guest: null, 
+                        status: 'waiting', 
+                        difficulty: difficulty, 
+                        lastUpdate: Date.now() 
+                    });
+                    isHost = true;
+                    window.NetworkAPI.listen(roomId);
+                    return roomId;
+                } catch (e) {
+                    forceOfflineStart(difficulty);
+                    return null;
+                }
             },
             joinRoom: async (id) => {
-                if (!user || !db) return false;
-                roomId = id;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                const snap = await getDoc(roomRef);
-                if (snap.exists() && snap.data().status === 'waiting') {
-                    await updateDoc(roomRef, { guest: user.uid, status: 'ready' });
-                    isHost = false;
-                    window.NetworkAPI.listen(roomId);
-                    return true;
-                }
-                return false;
+                const currentUser = auth?.currentUser;
+                if (!db || !currentUser) return false;
+                try {
+                    roomId = id;
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+                    const snap = await getDoc(roomRef);
+                    if (snap.exists() && snap.data().status === 'waiting') {
+                        await updateDoc(roomRef, { guest: currentUser.uid, status: 'ready' });
+                        isHost = false;
+                        window.NetworkAPI.listen(roomId);
+                        return true;
+                    }
+                    return false;
+                } catch (e) { return false; }
             },
             listen: (id) => {
-                if(!db) return;
-                if (unsubscribeRoom) unsubscribeRoom();
+                if(!db || STATE.isOfflineMode) return;
                 unsubscribeRoom = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', id), (docSnap) => {
                     const data = docSnap.data();
                     if (data) {
@@ -139,24 +163,40 @@
                         if (data.hostData && !isHost && window.updateEnemy) window.updateEnemy(data.hostData);
                         else if (data.guestData && isHost && window.updateEnemy) window.updateEnemy(data.guestData);
                     }
+                }, (error) => {
+                    if (error.code === 'resource-exhausted') {
+                        STATE.isOfflineMode = true;
+                        if(unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
+                        alert("โควต้าเต็ม! เปลี่ยนเป็นโหมดเล่นคนเดียว");
+                    }
                 });
             },
             send: async (data) => {
-                if (!roomId || !user || !db) return;
-                if (Math.random() > 0.7) {
+                if (!roomId || !db || !auth?.currentUser || STATE.isOfflineMode) return;
+                const now = Date.now();
+                if (now - lastSend < 2000) return; 
+                lastSend = now;
+                try {
                     const field = isHost ? 'hostData' : 'guestData';
                     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-                    await updateDoc(roomRef, { [field]: data }).catch(()=>{});
-                }
+                    await updateDoc(roomRef, { [field]: data });
+                } catch(e) { if(e.code === 'resource-exhausted') STATE.isOfflineMode = true; }
             },
             cancel: async () => {
                 if (unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
-                if (isHost && roomId && db) {
+                if (isHost && roomId && db && !STATE.isOfflineMode) {
                     try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId)); } catch(e) {}
                 }
                 roomId = null; isHost = false;
             }
         };
+
+        function forceOfflineStart(difficulty) {
+            STATE.isOfflineMode = true;
+            STATE.difficulty = difficulty || 'easy';
+            document.getElementById('lobby-overlay').classList.add('hidden');
+            if(window.onGameStart) window.onGameStart('blue');
+        }
     </script>
 </head>
 <body class="flex flex-col h-screen w-screen bg-gray-900 text-white">
@@ -166,10 +206,10 @@
         <div id="game-area">
             <canvas id="game-canvas" class="block w-full h-full"></canvas>
             
-            <!-- MINIMAP (Top Left) -->
+            <!-- MINIMAP (Top Right) -->
             <div id="minimap-container">
                 <canvas id="minimap-canvas" class="w-full h-full cursor-crosshair"></canvas>
-                <div class="absolute bottom-1 right-1 text-[8px] text-white/50 pointer-events-none font-bold bg-black/40 px-1 rounded backdrop-blur-sm">MAP</div>
+                <div class="absolute bottom-1 left-1 text-[8px] text-white/50 pointer-events-none font-bold bg-black/40 px-1 rounded backdrop-blur-sm">MAP</div>
             </div>
 
             <!-- Fit Screen Button -->
@@ -182,20 +222,15 @@
                 <div id="joystick-bg"><div id="joystick-stick"></div></div>
             </div>
 
-            <!-- 1. MAIN MENU -->
+            <!-- MENU -->
             <div id="menu-overlay" class="overlay-screen">
-                <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-8 drop-shadow-lg text-center">MATH MOBA</h1>
+                <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-8 drop-shadow-lg text-center">MATH ROV</h1>
                 <div class="flex flex-col gap-6 w-96">
-                    <button onclick="selectMode('single')" class="px-8 py-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-3xl shadow-xl hover:scale-105 transition-transform border-b-8 border-blue-800 flex items-center justify-center gap-4">
-                        <i class="fas fa-robot"></i> เล่นคนเดียว
-                    </button>
-                    <button onclick="selectMode('multiplayer')" class="px-8 py-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl text-3xl shadow-xl hover:scale-105 transition-transform border-b-8 border-purple-800 flex items-center justify-center gap-4">
-                        <i class="fas fa-users"></i> เล่นกับเพื่อน
-                    </button>
+                    <button onclick="selectMode('single')" class="px-8 py-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-3xl shadow-xl hover:scale-105 transition-transform border-b-8 border-blue-800 flex items-center justify-center gap-4"><i class="fas fa-robot"></i> เล่นคนเดียว</button>
+                    <button onclick="selectMode('multiplayer')" class="px-8 py-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl text-3xl shadow-xl hover:scale-105 transition-transform border-b-8 border-purple-800 flex items-center justify-center gap-4"><i class="fas fa-users"></i> เล่นกับเพื่อน</button>
                 </div>
             </div>
 
-            <!-- 2. DIFFICULTY SELECT -->
             <div id="difficulty-overlay" class="overlay-screen hidden">
                 <h2 class="text-5xl font-bold text-white mb-8">เลือกระดับความยาก</h2>
                 <div class="flex flex-col gap-5 w-80">
@@ -206,13 +241,12 @@
                 </div>
             </div>
 
-            <!-- 3. LOBBY -->
             <div id="lobby-overlay" class="overlay-screen hidden">
                 <h2 class="text-5xl font-bold text-purple-300 mb-8">LOBBY</h2>
                 <div id="lobby-menu" class="flex flex-col gap-6 w-96">
-                    <button onclick="createRoom()" class="px-6 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-2xl border-b-4 border-indigo-800">สร้างห้องใหม่</button>
+                    <button id="btn-create-room" onclick="createRoomWrapper()" class="px-6 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-2xl border-b-4 border-indigo-800">สร้างห้องใหม่</button>
                     <div class="flex gap-2">
-                        <input type="number" id="join-room-id" placeholder="รหัส 3 หลัก" class="flex-1 px-4 py-3 rounded-xl text-black text-center font-bold border-4 border-indigo-500 text-2xl" max="999">
+                        <input type="number" id="join-room-id" placeholder="รหัส 4 หลัก" class="flex-1 px-4 py-3 rounded-xl text-black text-center font-bold border-4 border-indigo-500 text-2xl" max="9999">
                         <button onclick="joinRoom()" class="px-6 py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl border-b-4 border-pink-800 text-xl">เข้าร่วม</button>
                     </div>
                     <button onclick="backToDifficulty()" class="mt-4 text-xl text-gray-400 hover:text-white underline text-center">ย้อนกลับ</button>
@@ -221,13 +255,10 @@
                     <div class="text-2xl text-gray-300 mb-4">รหัสห้องของคุณ</div>
                     <div id="display-room-id" class="text-9xl font-mono font-black text-yellow-400 bg-black/60 px-12 py-8 rounded-3xl border-4 border-yellow-500/50 mb-10 select-all tracking-widest shadow-[0_0_30px_rgba(250,204,21,0.3)]">...</div>
                     <div class="animate-pulse text-blue-300 mb-8 text-2xl"><i class="fas fa-spinner fa-spin mr-2"></i>รอเพื่อนเข้าร่วม...</div>
-                    <button onclick="cancelRoom()" class="px-10 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xl shadow-lg border-b-4 border-red-800 transition-transform active:scale-95">
-                        ยกเลิก
-                    </button>
+                    <button onclick="cancelRoom()" class="px-10 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xl shadow-lg border-b-4 border-red-800 transition-transform active:scale-95">ยกเลิก</button>
                 </div>
             </div>
 
-            <!-- In-Game Elements -->
             <div id="game-ui" class="hidden pointer-events-none absolute inset-0">
                 <div id="death-overlay" class="absolute inset-0 bg-gray-900/80 backdrop-blur-md hidden flex-col items-center justify-center z-50">
                     <h2 class="text-7xl md:text-9xl font-black text-red-600 mb-4 drop-shadow-lg">YOU DIED</h2>
@@ -240,54 +271,48 @@
                     <div id="recall-spinner" class="absolute inset-0 rounded-full border-4 border-white border-t-transparent animate-spin hidden"></div>
                 </button>
 
-                <!-- Player Status (Top Right) -->
-                <div class="absolute top-2 right-2 z-20 flex gap-2 pointer-events-none select-none">
-                    <div class="flex flex-col justify-center items-end gap-1 min-w-[140px]">
-                        <div class="h-4 bg-gray-900 rounded border border-gray-600 relative overflow-hidden w-full">
+                <!-- Player Status (Top Left) -->
+                <div class="absolute top-2 left-2 z-20 flex gap-2 pointer-events-none select-none">
+                    <div class="relative w-20 h-20 md:w-24 md:h-24 rounded-xl border-4 border-slate-700 shadow-2xl overflow-hidden bg-slate-800">
+                        <div class="absolute inset-0 flex items-center justify-center text-4xl text-blue-400"><i class="fas fa-user-ninja"></i></div>
+                        <div class="absolute bottom-0 w-full text-center bg-black/70 text-xs md:text-sm text-white font-bold py-1">LV.<span id="hud-level">1</span></div>
+                    </div>
+                    <div class="flex flex-col justify-center gap-1.5 min-w-[160px] md:min-w-[200px]">
+                        <div class="h-6 bg-gray-900 rounded border border-gray-600 relative overflow-hidden">
                             <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-green-600 to-green-400 w-full transition-all duration-300"></div>
-                            <span class="absolute inset-0 text-[10px] text-white flex items-center justify-center font-bold drop-shadow-md tracking-wider">
-                                <i class="fas fa-heart text-red-500 mr-1"></i> <span id="hud-hp-text">500/500</span>
+                            <span class="absolute inset-0 text-xs md:text-sm text-white flex items-center justify-center font-bold drop-shadow-md tracking-wider">
+                                <i class="fas fa-heart text-red-500 mr-1.5"></i> <span id="hud-hp-text">500/500</span>
                             </span>
                         </div>
-                        <div class="grid grid-cols-3 gap-x-2 gap-y-1.5 bg-black/60 p-1.5 rounded border border-slate-600/50 backdrop-blur-sm w-full">
-                            <div class="flex items-center justify-center text-[10px] text-white font-bold"><i class="fas fa-khanda text-red-400 mr-1"></i> <span id="hud-atk">45</span></div>
-                            <div class="flex items-center justify-center text-[10px] text-white font-bold"><i class="fas fa-shield-alt text-blue-400 mr-1"></i> <span id="hud-armor">0</span></div>
-                            <div class="flex items-center justify-center text-[10px] text-white font-bold"><i class="fas fa-bolt text-yellow-400 mr-1"></i> <span id="hud-aspd">1.0</span></div>
+                        <div class="grid grid-cols-3 gap-x-2 gap-y-1.5 bg-black/60 p-1.5 rounded border border-slate-600/50 backdrop-blur-sm">
+                            <div class="flex items-center justify-center text-xs md:text-sm text-white font-bold"><i class="fas fa-khanda text-red-400 mr-1"></i> <span id="hud-atk">45</span></div>
+                            <div class="flex items-center justify-center text-xs md:text-sm text-white font-bold"><i class="fas fa-shield-alt text-blue-400 mr-1"></i> <span id="hud-armor">0</span></div>
+                            <div class="flex items-center justify-center text-xs md:text-sm text-white font-bold"><i class="fas fa-bolt text-yellow-400 mr-1"></i> <span id="hud-aspd">1.0</span></div>
                         </div>
-                    </div>
-                     <div class="relative w-14 h-14 rounded-xl border-4 border-slate-700 shadow-2xl overflow-hidden bg-slate-800">
-                        <div class="absolute inset-0 flex items-center justify-center text-3xl text-blue-400"><i class="fas fa-user-ninja"></i></div>
-                        <div class="absolute bottom-0 w-full text-center bg-black/70 text-[9px] text-white font-bold py-0.5">LV.<span id="hud-level">1</span></div>
                     </div>
                 </div>
 
                 <!-- Target Status -->
-                <div id="target-panel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-3 pointer-events-none select-none transition-opacity duration-200 opacity-0 bg-black/70 backdrop-blur-md p-1.5 rounded-xl border border-red-500/30 min-w-[120px]">
-                    <div class="relative w-10 h-10 rounded-lg border-2 border-red-500 overflow-hidden bg-slate-800 shrink-0">
-                        <div class="absolute inset-0 flex items-center justify-center text-2xl text-red-400"><i id="target-icon" class="fas fa-skull"></i></div>
+                <div id="target-panel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-3 pointer-events-none select-none transition-opacity duration-200 opacity-0 bg-black/70 backdrop-blur-md p-2 rounded-xl border border-red-500/30 min-w-[150px] md:min-w-[200px]">
+                    <div class="relative w-12 h-12 rounded-lg border-2 border-red-500 overflow-hidden bg-slate-800 shrink-0">
+                        <div class="absolute inset-0 flex items-center justify-center text-3xl text-red-400"><i id="target-icon" class="fas fa-skull"></i></div>
                     </div>
                     <div class="flex flex-col justify-center w-full">
-                        <div class="text-[10px] text-red-200 font-bold uppercase tracking-wider mb-0.5" id="target-name">Enemy</div>
-                        <div class="h-3 bg-gray-900 rounded-full border border-gray-600 relative overflow-hidden">
+                        <div class="text-xs md:text-sm text-red-200 font-bold uppercase tracking-wider mb-0.5" id="target-name">Enemy</div>
+                        <div class="h-4 bg-gray-900 rounded-full border border-gray-600 relative overflow-hidden mb-1">
                             <div id="target-hp-bar" class="h-full bg-red-600 w-full transition-all duration-200"></div>
-                            <div class="absolute inset-0 flex items-center justify-center"><span id="target-hp-text" class="text-[8px] font-bold text-white drop-shadow-md"></span></div>
+                            <div class="absolute inset-0 flex items-center justify-center"><span id="target-hp-text" class="text-[10px] font-bold text-white drop-shadow-md"></span></div>
+                        </div>
+                        <div class="flex gap-3 text-[10px] md:text-xs text-white font-bold">
+                            <span>ATK: <span id="target-atk" class="text-red-300">10</span></span>
+                            <span>DEF: <span id="target-armor" class="text-blue-300">0</span></span>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Game Over -->
-            <div id="game-over-overlay" class="absolute inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center text-center pointer-events-auto">
-                <div id="end-icon" class="text-9xl mb-8 animate-bounce">🏆</div>
-                <h1 id="game-result-title" class="text-8xl md:text-9xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600">VICTORY</h1>
-                <p id="game-result-desc" class="text-gray-400 text-3xl mb-12">The enemy core has been destroyed!</p>
-                <button onclick="location.reload()" class="px-16 py-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-4xl shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-105 btn-press">
-                    PLAY AGAIN
-                </button>
-            </div>
         </div>
 
-        <!-- Control Panel (Compact Row) -->
+        <!-- Control Panel -->
         <div id="ui-panel">
             <!-- SHOP (Left) -->
             <div class="flex-1 bg-slate-900 border-r-2 border-slate-700 flex flex-col p-1.5 min-w-0">
@@ -295,7 +320,6 @@
                     <h3 class="font-bold text-xs flex items-center gap-1"><i class="fas fa-store text-indigo-400"></i> ร้านค้า</h3>
                     <span class="text-xs font-bold text-yellow-300 font-mono bg-yellow-900/30 px-2 rounded border border-yellow-500/30"><i class="fas fa-coins text-yellow-400 mr-1"></i><span id="shop-gold-display">0</span></span>
                 </div>
-                <!-- Single Row Grid for Items -->
                 <div id="shop-grid" class="grid grid-cols-4 gap-1 h-full content-center"></div>
             </div>
             
@@ -306,18 +330,16 @@
                     <h3 class="font-bold text-xs md:text-sm text-yellow-400 flex items-center gap-1"><i class="fas fa-brain"></i> Farm Gold</h3>
                     <span class="text-[10px] font-bold bg-yellow-400/20 px-2 py-0.5 rounded text-yellow-300 border border-yellow-400/30">+50G</span>
                 </div>
-                <div class="flex flex-col justify-center gap-1.5 z-10 h-full">
+                <div class="flex-grow flex flex-col justify-center gap-1.5 z-10 h-full">
                     <div class="bg-black/50 border-2 border-slate-600 rounded-lg p-1 text-center shadow-inner">
                         <span id="math-q" class="text-xl font-mono font-black text-white tracking-widest drop-shadow-md">?</span>
                     </div>
-                    <!-- Single Row Grid for Answers -->
                     <div id="math-options-grid" class="grid grid-cols-4 gap-1 h-12"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MAIN GAME SCRIPT -->
     <script>
         const AudioSys = {
             ctx: null,
@@ -332,9 +354,8 @@
 
         const CONFIG = { mapW: 3800, mapH: 1400, baseHp: 5000, towerHp: 1500, spawnRate: 10000, fountainRadius: 350, fountainBlueX: 100, fountainRedX: 3700 };
         const ASSETS = { colors: { grass: '#064e3b', grassDark: '#022c22', lane: '#78716c', river: '#0ea5e9' } };
-        const STATE = { active: false, lastTime: 0, gold: 200, cam: { x: 0, y: 0 }, target: null, selectedUnit: null, shake: 0, difficulty: 'easy', gameMode: 'single', scale: 1 };
+        const STATE = { active: false, lastTime: 0, gold: 200, cam: { x: 0, y: 0 }, target: null, selectedUnit: null, shake: 0, difficulty: 'easy', gameMode: 'single', scale: 1, isOfflineMode: false };
         
-        // Joystick State
         const JOY = { active: false, dx: 0, dy: 0, id: null };
         const STAT_CAPS = { minAtkCd: 15, maxArmor: 300, maxSpeed: 10 };
 
@@ -374,15 +395,15 @@
                     const tMaxHp = isNaN(t.maxHp) ? 100 : t.maxHp;
                     setText('target-name', t.type.toUpperCase());
                     setText('target-hp-text', `${tHp}/${tMaxHp}`);
-                    
                     const tHpBar = document.getElementById('target-hp-bar');
                     if(tHpBar) tHpBar.style.width = (tHp / tMaxHp * 100) + '%';
-                    
                     setText('target-atk', Math.round(t.dmg || 0));
                     setText('target-armor', Math.round(t.armor || 0));
                     
                     const icon = document.getElementById('target-icon');
                     if(icon) {
+                        // Reset classes first
+                        icon.className = '';
                         if (t.type === 'base') icon.className = 'fas fa-gem';
                         else if (t.type === 'tower') icon.className = 'fas fa-chess-rook';
                         else icon.className = 'fas fa-skull';
@@ -394,7 +415,10 @@
         function createDamageText(x, y, val, color) {
             if(Math.random()>0.8)return;
             const el=document.createElement('div'); el.className='damage-text'; el.style.color=color; el.innerText=Math.round(val);
-            const sx = (x - STATE.cam.x) * STATE.scale; const sy = (y - STATE.cam.y) * STATE.scale;
+            // Adjusted screen position calculation for scaling
+            const sx = (x - STATE.cam.x) * STATE.scale;
+            const sy = (y - STATE.cam.y) * STATE.scale;
+            
             if(sx>0&&sx<canvas.width&&sy>0&&sy<canvas.height) { el.style.left=sx+'px'; el.style.top=sy+'px'; gameArea.appendChild(el); setTimeout(()=>el.remove(),600); }
         }
 
@@ -402,6 +426,24 @@
             const el=document.createElement('div'); el.className='damage-text'; el.style.color=color; el.innerText=text; el.style.fontSize='30px'; el.style.zIndex='101';
              const sx = (x - STATE.cam.x) * STATE.scale; const sy = (y - STATE.cam.y) * STATE.scale;
             el.style.left=sx+'px'; el.style.top=(sy-30)+'px'; gameArea.appendChild(el); setTimeout(()=>el.remove(),800);
+        }
+
+        function resize() {
+            canvas.width = gameArea.clientWidth;
+            canvas.height = gameArea.clientHeight;
+            const mmRect = mmCanvas.parentElement.getBoundingClientRect();
+            mmCanvas.width = mmRect.width;
+            mmCanvas.height = mmRect.height;
+            MM_SCALE_X = mmCanvas.width / CONFIG.mapW;
+            MM_SCALE_Y = mmCanvas.height / CONFIG.mapH;
+            
+            const targetVisibleHeight = 800;
+            STATE.scale = canvas.height / targetVisibleHeight;
+            STATE.scale = Math.max(0.5, Math.min(1.5, STATE.scale));
+
+            if (!STATE.active && player) {
+                draw(); drawMinimap();
+            }
         }
 
         function gameOver(win) {
@@ -424,6 +466,22 @@
                 player.isRecalling = true; player.recallTimer = 180;
                 document.getElementById('recall-spinner').classList.remove('hidden');
             }
+        }
+        
+        function createRoomWrapper() { 
+            if(window.NetworkAPI) window.NetworkAPI.createRoom(STATE.difficulty); 
+        }
+
+        function joinRoom() { 
+            const id = document.getElementById('join-room-id').value;
+            if(window.NetworkAPI && id) window.NetworkAPI.joinRoom(id); 
+        }
+
+        function cancelRoom() { 
+            if(window.NetworkAPI) window.NetworkAPI.cancel(); 
+            document.getElementById('lobby-waiting').classList.add('hidden'); 
+            document.getElementById('lobby-waiting').classList.remove('flex'); 
+            document.getElementById('lobby-menu').classList.remove('hidden');
         }
 
         function createTower(team, x, y) {
@@ -460,9 +518,9 @@
                         const d=Math.hypot(t.x-this.x, t.y-this.y);
                         if(d<=this.range) { if(this.atkCd<=0){ this.fire(t); this.atkCd=this.atkSpeedBase; } }
                         else if(this.speed>0) {
-                            if(this!==player && !(STATE.gameMode==='multiplayer'&&this===enemyHero)) this.moveTowards(t.x, t.y);
+                            if(this!==player && this!==enemyHero) this.moveTowards(t.x, t.y);
                         }
-                    } else if(this.speed>0 && this!==player && !(STATE.gameMode==='multiplayer'&&this===enemyHero)) {
+                    } else if(this.speed>0 && this!==player && this!==enemyHero) {
                         this.moveTowards(this.team==='blue'?CONFIG.fountainRedX:CONFIG.fountainBlueX, CONFIG.mapH/2);
                     }
                 }
@@ -504,41 +562,72 @@
                     if(STATE.selectedUnit===this) STATE.selectedUnit=null;
                 }
             }
+            // MODIFIED DRAW FUNCTION FOR ICONS
             draw(ctx) {
                 if(this.dead)return;
-                ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(this.x,this.y+this.radius*0.8,this.radius,this.radius*0.4,0,0,Math.PI*2); ctx.fill();
                 
+                // Shadow
+                ctx.fillStyle='rgba(0,0,0,0.3)'; 
+                ctx.beginPath(); 
+                ctx.ellipse(this.x,this.y+this.radius*0.8,this.radius,this.radius*0.4,0,0,Math.PI*2); 
+                ctx.fill();
+                
+                // Team Color Ring/Glow
+                ctx.strokeStyle = this.team === 'blue' ? '#3b82f6' : '#ef4444';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Range Indicators
                 if((this.type==='tower'||this.type==='base')&&this.team!==player.team) {
                    const d=Math.hypot(player.x-this.x, player.y-this.y);
                    if(d<this.range+200) {
                        ctx.beginPath(); ctx.arc(this.x,this.y,this.range,0,Math.PI*2);
-                       ctx.strokeStyle='rgba(239,68,68,0.4)'; ctx.lineWidth=2; ctx.setLineDash([10,10]); ctx.stroke(); ctx.setLineDash([]);
+                       ctx.strokeStyle='rgba(239,68,68,0.2)'; ctx.lineWidth=1; ctx.setLineDash([10,10]); ctx.stroke(); ctx.setLineDash([]);
                    } 
                 }
-
-                ctx.fillStyle = this.team==='blue'?'#3b82f6':'#ef4444';
-                if(this.type==='tower') ctx.fillRect(this.x-25,this.y-40,50,80);
-                else if(this.type==='base') { ctx.beginPath(); ctx.arc(this.x,this.y,70,0,Math.PI*2); ctx.fill(); }
-                else { ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fill(); }
                 
-                if(this.type==='hero') {
-                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
-                    ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI*2);
-                    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke(); 
+                // Icon Rendering
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                if (this.type === 'hero') {
+                    ctx.font = '40px sans-serif';
+                    ctx.fillText(this.team === 'blue' ? '🥷' : '👹', this.x, this.y);
+                } else if (this.type === 'minion') {
+                    ctx.font = '24px sans-serif';
+                    ctx.fillText(this.team === 'blue' ? '⚔️' : '🦠', this.x, this.y);
+                } else if (this.type === 'tower') {
+                    ctx.font = '900 50px sans-serif'; 
+                    ctx.fillStyle = this.team === 'blue' ? '#60a5fa' : '#f87171';
+                    ctx.fillText('♜', this.x, this.y);
+                } else if (this.type === 'base') {
+                    ctx.font = '60px sans-serif';
+                    ctx.fillText(this.team === 'blue' ? '🏰' : '🏯', this.x, this.y);
+                }
+
+                // Health Bar
+                const safeHp = isNaN(this.hp) ? 0 : this.hp;
+                const safeMaxHp = isNaN(this.maxHp) || this.maxHp === 0 ? 100 : this.maxHp;
+                const barW = 60;
+                const barH = 6;
+                const barY = this.y - this.radius - 15;
+                
+                ctx.fillStyle='#000'; ctx.fillRect(this.x - barW/2, barY, barW, barH);
+                ctx.fillStyle=this.team==='blue'?'#60a5fa':'#f87171'; 
+                ctx.fillRect(this.x - barW/2, barY, barW * (safeHp/safeMaxHp), barH);
+                
+                // Hero Selection/Self Ring
+                if(this.type==='hero' && this === player) {
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; 
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI*2); ctx.stroke();
                 }
 
                 if(STATE.selectedUnit===this) { 
-                    ctx.strokeStyle='#facc15'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,this.radius+10,0,Math.PI*2); ctx.stroke(); 
-                    ctx.beginPath(); ctx.arc(this.x,this.y,this.range,0,Math.PI*2);
-                    ctx.strokeStyle = this.team === 'blue' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-                    ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+                    ctx.strokeStyle='#facc15'; ctx.lineWidth=2; 
+                    ctx.beginPath(); ctx.arc(this.x,this.y,this.radius+10,0,Math.PI*2); ctx.stroke(); 
                 }
-                
-                const safeHp = isNaN(this.hp) ? 0 : this.hp;
-                const safeMaxHp = isNaN(this.maxHp) || this.maxHp === 0 ? 100 : this.maxHp;
-                
-                ctx.fillStyle='#000'; ctx.fillRect(this.x-30,this.y-this.radius-15,60,6);
-                ctx.fillStyle=this.team==='blue'?'#60a5fa':'#f87171'; ctx.fillRect(this.x-30,this.y-this.radius-15,60*(safeHp/safeMaxHp),6);
             }
         }
 
@@ -547,6 +636,7 @@
                 super('hero', team, 0, 0, 25);
                 this.maxHp=600; this.hp=600; this.dmg=60; this.armor=15; this.range=220; this.speed=6; // Hero faster
                 this.isRecalling=false; this.recallTimer=0; this.maxRecallTime=180; this.respawnTimer=0;
+                this.lastNetUpdate = 0;
                 this.spawn();
             }
             spawn() {
@@ -577,6 +667,29 @@
                     }
                     return;
                 }
+                
+                // Simple AI for Enemy (Offline Mode or Online opponent)
+                if (this === enemyHero) {
+                    // Basic fallback AI if online data missing or offline mode
+                    if(STATE.gameMode === 'single' || STATE.isOfflineMode) {
+                         if (this.hp < this.maxHp * 0.3) {
+                             this.moveTowards(CONFIG.fountainRedX, CONFIG.mapH/2);
+                        } else {
+                            let t = this.findTarget();
+                            if (t) {
+                                const d = Math.hypot(t.x - this.x, t.y - this.y);
+                                 if (d <= this.range) {
+                                     if (this.atkCd <= 0) { this.fire(t); this.atkCd = this.atkSpeedBase; }
+                                 } else {
+                                     this.moveTowards(t.x, t.y);
+                                 }
+                            } else {
+                                this.moveTowards(CONFIG.mapW/2, CONFIG.mapH/2);
+                            }
+                        }
+                    }
+                }
+
                 if(this===player) {
                     if(this.isRecalling) {
                         this.recallTimer--;
@@ -586,7 +699,6 @@
                              document.getElementById('recall-spinner').classList.add('hidden'); 
                              createFloatingText(this.x,this.y,"Recalled!","#3b82f6"); 
                              STATE.target=null; 
-                             // Heal at base
                              this.hp = this.maxHp;
                         }
                     }
@@ -610,7 +722,13 @@
                         else STATE.target=null;
                     }
                     
-                    if(STATE.gameMode==='multiplayer'&&window.NetworkAPI) window.NetworkAPI.send({x:this.x, y:this.y, hp:this.hp, maxHp:this.maxHp});
+                    if(STATE.gameMode==='multiplayer' && window.NetworkAPI && !STATE.isOfflineMode) {
+                        const now = Date.now();
+                        if (now - this.lastNetUpdate > 2000) { 
+                             window.NetworkAPI.send({x:this.x, y:this.y, hp:this.hp, maxHp:this.maxHp});
+                             this.lastNetUpdate = now;
+                        }
+                    }
                     const homeX=this.team==='blue'?CONFIG.fountainBlueX:CONFIG.fountainRedX;
                     if(Math.hypot(this.x-homeX,this.y-CONFIG.mapH/2)<CONFIG.fountainRadius && this.hp<this.maxHp) this.hp=Math.min(this.hp+5, this.maxHp);
                     
@@ -649,18 +767,33 @@
             }
             update() {
                 if(this.dead)return;
+                
+                if(this.atkCd>0)this.atkCd--;
+
+                if(this.speed>0) {
+                    let sx=0, sy=0;
+                    entities.forEach(o=>{
+                        if(o!==this && !o.dead && o.speed>0) {
+                            const dx=this.x-o.x, dy=this.y-o.y, d=Math.hypot(dx,dy), md=this.radius+o.radius+5;
+                            if(d<md && d>0.1) { const p=(md-d)/d; sx+=dx*p*0.1; sy+=dy*p*0.1; }
+                        }
+                    });
+                    this.x+=sx; this.y+=sy;
+                }
+
                 let t=this.findTarget();
                 if(t && Math.hypot(t.x-this.x, t.y-this.y)<=this.range) {
                     if(this.atkCd<=0){ this.fire(t); this.atkCd=this.atkSpeedBase; }
                 } else {
                     if(this.wpIdx < this.waypoints.length) {
                         const wp=this.waypoints[this.wpIdx];
-                        if(Math.hypot(wp.x-this.x, wp.y-this.y)<20) this.wpIdx++; else this.moveTowards(wp.x, wp.y);
+                        if(Math.hypot(wp.x-this.x, wp.y-this.y)<20) this.wpIdx++; 
+                        else this.moveTowards(wp.x, wp.y);
                     } else {
-                        this.moveTowards(this.team==='blue'?CONFIG.mapW-150:150, CONFIG.mapH/2);
+                         this.moveTowards(this.team==='blue'?CONFIG.fountainRedX:CONFIG.fountainBlueX, CONFIG.mapH/2);
                     }
                 }
-                super.update();
+                // Do NOT call super.update() to avoid conflicting move logic
             }
         }
 
@@ -670,17 +803,21 @@
         function backToMenu() { document.getElementById('difficulty-overlay').classList.add('hidden'); document.getElementById('menu-overlay').classList.remove('hidden'); }
         function backToDifficulty() { document.getElementById('lobby-overlay').classList.add('hidden'); document.getElementById('difficulty-overlay').classList.remove('hidden'); document.getElementById('difficulty-overlay').classList.add('flex'); }
         
-        async function createRoom() { if(window.NetworkAPI) { const id=await window.NetworkAPI.createRoom(STATE.difficulty); if(id){ document.getElementById('lobby-menu').classList.add('hidden'); document.getElementById('lobby-waiting').classList.remove('hidden'); document.getElementById('lobby-waiting').classList.add('flex'); document.getElementById('display-room-id').innerText=id; } else alert("Error"); } else alert("No Net"); }
+        async function createRoomWrapper() { if(window.NetworkAPI) { const id=await window.NetworkAPI.createRoom(STATE.difficulty); if(id){ document.getElementById('lobby-menu').classList.add('hidden'); document.getElementById('lobby-waiting').classList.remove('hidden'); document.getElementById('lobby-waiting').classList.add('flex'); document.getElementById('display-room-id').innerText=id; } } }
         async function joinRoom() { if(window.NetworkAPI) { const id=document.getElementById('join-room-id').value.trim(); if(!id)return; const s=await window.NetworkAPI.joinRoom(id); if(s) document.getElementById('lobby-overlay').classList.add('hidden'); else alert("Not Found"); } }
         function cancelRoom() { if(window.NetworkAPI&&window.NetworkAPI.cancel) window.NetworkAPI.cancel(); document.getElementById('lobby-waiting').classList.add('hidden'); document.getElementById('lobby-waiting').classList.remove('flex'); document.getElementById('lobby-menu').classList.remove('hidden'); }
         
         window.onGameStart = (t) => { if(STATE.active)return; document.getElementById('lobby-overlay').classList.add('hidden'); startGame(t,'multiplayer'); };
         window.setDifficulty = (d) => { STATE.difficulty = d; };
-        window.updateEnemy = (d) => { if(enemyHero){ enemyHero.x=d.x; enemyHero.y=d.y; enemyHero.hp=d.hp; enemyHero.maxHp=d.maxHp; } };
+        window.updateEnemy = (d) => { 
+            if(enemyHero){ 
+                enemyHero.x=d.x; enemyHero.y=d.y; enemyHero.hp=d.hp; enemyHero.maxHp=d.maxHp; 
+            } 
+        };
 
-        // --- GAME LOGIC ---
         function startGame(team, mode) {
             STATE.gameMode = mode; STATE.active = true; AudioSys.init();
+            document.getElementById('menu-overlay').classList.add('hidden'); 
             document.getElementById('game-ui').classList.remove('hidden');
             entities = []; particles = []; projectiles = [];
             
@@ -691,14 +828,13 @@
             player = new Hero(team);
             enemyHero = new Hero(team==='blue'?'red':'blue');
 
-            // Initial resize to set scale before loop
             resize();
-            
             generateShop(); newMath(); loop(performance.now());
         }
 
         function spawnTowers() {
             const w=CONFIG.mapW, h=CONFIG.mapH, m=200;
+            // Correctly assign stats to towers
             // Outer (Tier 1) - Corrected X positions to ensure gap
             // Blue T1 (Mid): 1500, Red T1 (Mid): 2300 (Gap 800)
             createTower('blue', 1500, h/2); createTower('blue', 900, h/2); // Mid (Outer, Inner)
@@ -775,14 +911,11 @@
             if(redBase.hp<=0) gameOver(true); if(blueBase.hp<=0) gameOver(false);
             updateHud();
             
-            // Draw
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.save();
-            // Scale and Translate
             ctx.scale(STATE.scale, STATE.scale);
             ctx.translate(-STATE.cam.x, -STATE.cam.y);
             
-            // Map
             ctx.fillStyle=ASSETS.colors.grassDark; ctx.fillRect(0,0,CONFIG.mapW,CONFIG.mapH);
             ctx.fillStyle='#064e3b'; ctx.beginPath(); ctx.arc(CONFIG.fountainBlueX,CONFIG.mapH/2,CONFIG.fountainRadius,0,Math.PI*2); ctx.fill();
             ctx.fillStyle='#450a0a'; ctx.beginPath(); ctx.arc(CONFIG.fountainRedX,CONFIG.mapH/2,CONFIG.fountainRadius,0,Math.PI*2); ctx.fill();
@@ -798,7 +931,6 @@
             particles.forEach(p=>p.draw(ctx));
             ctx.restore();
 
-            // Minimap
             mmCtx.fillStyle='#0f172a'; mmCtx.fillRect(0,0,mmCanvas.width,mmCanvas.height);
             mmCtx.strokeStyle='#334155'; mmCtx.lineWidth=2;
             const mw=mmCanvas.width, mh=mmCanvas.height;
@@ -816,7 +948,6 @@
             mmCtx.strokeStyle='#fbbf24'; mmCtx.lineWidth=1; mmCtx.strokeRect(vx,vy,vw,vh);
         }
 
-        // Joystick Event Listeners
         const joystickZone = document.getElementById('joystick-zone');
         const joystickStick = document.getElementById('joystick-stick');
         const joystickBg = document.getElementById('joystick-bg');
@@ -871,11 +1002,9 @@
             joystickStick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
         }
         
-        // Mouse/Touch Events for Tap-to-Move
         canvas.addEventListener('mousedown', (e) => {
             if(!player) return;
             const rect = canvas.getBoundingClientRect();
-            // Adjusted world click calculation for Scale
             const worldX = (e.clientX - rect.left) / STATE.scale + STATE.cam.x;
             const worldY = (e.clientY - rect.top) / STATE.scale + STATE.cam.y;
             handleInput(worldX, worldY);
@@ -885,7 +1014,6 @@
             if(JOY.active) return; // Ignore if using joystick
             const rect = canvas.getBoundingClientRect();
             const touch = e.touches[0];
-            // Adjusted world touch calculation for Scale
             const worldX = (touch.clientX - rect.left) / STATE.scale + STATE.cam.x;
             const worldY = (touch.clientY - rect.top) / STATE.scale + STATE.cam.y;
             handleInput(worldX, worldY);
@@ -903,10 +1031,6 @@
                 STATE.target = { x: worldX, y: worldY };
                 const marker = document.createElement('div');
                 marker.className = 'absolute w-4 h-4 border-2 border-green-400 rounded-full animate-ping pointer-events-none';
-                // Marker is DOM based (screen coords)
-                // Need to convert back to screen for initial placement? 
-                // Or update marker in loop?
-                // For simple feedback, calculate screen pos once
                 const screenX = (worldX - STATE.cam.x) * STATE.scale;
                 const screenY = (worldY - STATE.cam.y) * STATE.scale;
                 
@@ -932,11 +1056,8 @@
             MM_SCALE_X = mmCanvas.width / CONFIG.mapW;
             MM_SCALE_Y = mmCanvas.height / CONFIG.mapH;
             
-            // --- AUTO SCALING LOGIC ---
             const targetVisibleHeight = 800;
             STATE.scale = canvas.height / targetVisibleHeight;
-            
-            // Safety clamp for very wide/tall screens
             STATE.scale = Math.max(0.5, Math.min(1.5, STATE.scale));
 
             if (!STATE.active && player) {
@@ -946,6 +1067,17 @@
         window.addEventListener('resize', resize);
         setTimeout(resize, 100);
 
+        // Expose to window for button clicks
+        window.startGame = startGame;
+        window.createRoomWrapper = createRoomWrapper;
+        window.joinRoom = joinRoom;
+        window.cancelRoom = cancelRoom;
+        window.selectMode = selectMode;
+        window.confirmDifficulty = confirmDifficulty;
+        window.backToMenu = backToMenu;
+        window.backToDifficulty = backToDifficulty;
+        window.toggleFullScreen = toggleFullScreen;
+        window.startPlayerRecall = startPlayerRecall;
     </script>
 </body>
 </html>
